@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Furniture Payroll Tracker</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <div id="firebase-setup-modal" class="modal">
+            <div class="modal-content">
+                <h2>Firebase Setup Required</h2>
+                <p>Enter your Firebase credentials to enable data storage</p>
+                <input type="text" id="apiKey" placeholder="API Key" class="input-field">
+                <input type="text" id="authDomain" placeholder="Auth Domain" class="input-field">
+                <input type="text" id="databaseURL" placeholder="Database URL" class="input-field">
+                <input type="text" id="projectId" placeholder="Project ID" class="input-field">
+                <button onclick="connectFirebase()" class="btn btn-primary">Connect to Firebase</button>
+            </div>
+        </div>
+        <div id="main-app" style="display:none;">
+            <!-- App content loads here -->
+            <header class="app-header">
+                <h1>🛠️ Furniture Payroll Tracker</h1>
+                <div class="nav-tabs">
+                    <button class="tab-btn active" onclick="showTab('dashboard')">Dashboard</button>
+                    <button class="tab-btn" onclick="showTab('team')">Team</button>
+                    <button class="tab-btn" onclick="showTab('attendance')">Attendance</button>
+                    <button class="tab-btn" onclick="showTab('advances')">Advances</button>
+                    <button class="tab-btn" onclick="showTab('dailyLabor')">Daily Labor</button>
+                    <button class="tab-btn" onclick="showTab('payroll')">Payroll</button>
+                    <button class="tab-btn" onclick="showTab('export')">Export/Backup</button>
+                </div>
+            </header>
+            <main id="tab-content"></main>
+        </div>
+    </div>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
