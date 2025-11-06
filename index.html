@@ -3,444 +3,1045 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Furniture Payroll Tracker</title>
-    <!-- Load Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Use Inter font -->
+    <title>Attendance & Payroll Tracker - Furniture Workshop</title>
     <style>
         :root {
-            /* Custom Colors for Theme */
-            --color-primary: #5e4730; /* Brown */
-            --color-secondary: #fce8a6; /* Light Cream */
-            --color-background: #fcfcf9; /* Off-White */
-            --color-text-dark: #1f2121;
-            --color-text-light: #626c71;
-            --color-success: #10b981;
-            --color-error: #ef4444;
-        }
+  /* Primitive Color Tokens */
+  --color-white: rgba(255, 255, 255, 1);
+  --color-black: rgba(0, 0, 0, 1);\
+  --color-cream-50: rgba(252, 252, 249, 1);
+  --color-cream-100: rgba(255, 255, 253, 1);
+  --color-gray-200: rgba(245, 245, 245, 1);
+  --color-gray-300: rgba(167, 169, 169, 1);
+  --color-gray-400: rgba(119, 124, 124, 1);
+  --color-slate-500: rgba(98, 108, 113, 1);
+  --color-brown-600: rgba(94, 82, 64, 1);
+  --color-charcoal-700: rgba(31, 33, 33, 1);
+  --color-charcoal-800: rgba(38, 40, 40, 1);
 
-        body {
-            font-family: "Inter", sans-serif;
-            background-color: var(--color-background);
-            color: var(--color-text-dark);
-        }
+  --color-primary-light: rgba(216, 219, 212, 1);
+  --color-primary: var(--color-brown-600);
+  --color-primary-dark: var(--color-charcoal-700);
+  --color-secondary: var(--color-slate-500);
 
-        /* Custom Styles for aesthetics */
-        .header-shadow {
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-        }
+  --color-success: rgba(40, 167, 69, 1);
+  --color-warning: rgba(255, 193, 7, 1);
+  --color-error: rgba(220, 53, 69, 1);
+  --color-info: rgba(23, 162, 184, 1);
 
-        .tab-button.active {
-            border-bottom-width: 3px;
-            border-color: var(--color-primary);
-            color: var(--color-primary);
-            font-weight: 600;
-        }
+  /* Semantic Color Tokens */
+  --color-bg-primary: var(--color-cream-100);
+  --color-bg-secondary: var(--color-cream-50);
+  --color-bg-tertiary: var(--color-gray-200);
+  --color-text: var(--color-charcoal-700);
+  --color-text-light: var(--color-slate-500);
+  --color-border: var(--color-gray-200);
+  --color-shadow: rgba(0, 0, 0, 0.1);
 
-        .btn-primary {
-            background-color: var(--color-primary);
-            color: var(--color-white);
-            border: none;
-            transition: background-color 0.2s;
-        }
-        .btn-primary:hover {
-            background-color: #7b5f40;
-        }
+  /* Typography */
+  --font-family-primary: 'Inter', sans-serif;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.875rem;
+  --font-size-4xl: 2.25rem;
+  --font-weight-light: 300;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
 
-        .btn-secondary {
-            background-color: #e5e7eb;
-            color: var(--color-text-dark);
-            border: 1px solid #d1d5db;
-        }
-        .btn-secondary:hover {
-            background-color: #d1d5db;
-        }
+  /* Spacing */
+  --space-4: 0.25rem;
+  --space-8: 0.5rem;
+  --space-12: 0.75rem;
+  --space-16: 1rem;
+  --space-20: 1.25rem;
+  --space-24: 1.5rem;
+  --space-32: 2rem;
+  --space-40: 2.5rem;
 
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0, 0, 0, 0.4);
-            backdrop-filter: blur(2px);
-        }
+  /* Border Radius */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+}
 
-        .modal-content {
-            background-color: var(--color-white);
-            margin: 10vh auto;
-            padding: 24px;
-            border-radius: 12px;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            max-width: 95%;
-            width: 600px;
-        }
+/* Global Styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
-        .toast {
-            visibility: hidden;
-            min-width: 250px;
-            background-color: var(--color-text-dark);
-            color: var(--color-white);
-            text-align: center;
-            border-radius: 8px;
-            padding: 16px;
-            position: fixed;
-            z-index: 1001;
-            left: 50%;
-            bottom: 30px;
-            transform: translateX(-50%);
-            font-size: 14px;
-        }
+html {
+  font-size: 16px;
+  background-color: var(--color-bg-tertiary);
+}
 
-        .toast.show {
-            visibility: visible;
-            animation: fadein 0.5s, fadeout 0.5s 2.5s;
-        }
+body {
+  font-family: var(--font-family-primary);
+  color: var(--color-text);
+  line-height: 1.6;
+  background-color: var(--color-bg-primary);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
 
-        @keyframes fadein {
-            from {bottom: 0; opacity: 0;}
-            to {bottom: 30px; opacity: 1;}
-        }
+/* Container */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--space-32);
+  flex-grow: 1;
+}
 
-        @keyframes fadeout {
-            from {bottom: 30px; opacity: 1;}
-            to {bottom: 0; opacity: 0;}
-        }
+/* Header */
+.header {
+  background-color: var(--color-primary-dark);
+  color: var(--color-white);
+  padding: var(--space-16) 0;
+  box-shadow: 0 2px 4px var(--color-shadow);
+}
 
-        /* Table Specific Styles */
-        .styled-table thead tr {
-            background-color: var(--color-primary);
-            color: white;
-            text-align: left;
-        }
+.header .container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-16) var(--space-32);
+}
 
-        .styled-table th,
-        .styled-table td {
-            padding: 12px 15px;
-        }
+.header h1 {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary-light);
+}
 
-        .styled-table tbody tr {
-            border-bottom: 1px solid #f3f3f3;
-        }
+.user-info {
+    font-size: var(--font-size-sm);
+    color: var(--color-primary-light);
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
 
-        .styled-table tbody tr:nth-of-type(even) {
-            background-color: #f8f8f8;
-        }
+/* Tabs */
+.tabs {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: var(--space-32);
+  border-bottom: 2px solid var(--color-border);
+  padding: 0 var(--space-32);
+  background-color: var(--color-white);
+  box-shadow: 0 1px 3px var(--color-shadow);
+}
 
-        .styled-table tbody tr:last-of-type {
-            border-bottom: 2px solid var(--color-primary);
-        }
+.tab-button {
+  background: none;
+  border: none;
+  padding: var(--space-12) var(--space-20);
+  cursor: pointer;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-slate-500);
+  transition: all 0.2s ease-in-out;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px; /* Pulls button slightly down to align border */
+}
+
+.tab-button:hover {
+  color: var(--color-primary);
+}
+
+.tab-button.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.tab-content {
+  display: none;
+  padding: var(--space-24) var(--space-32);
+  background-color: var(--color-white);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 10px var(--color-shadow);
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* Utility Classes */
+.flex-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-16);
+    margin-bottom: var(--space-24);
+}
+
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.font-bold { font-weight: var(--font-weight-bold); }
+.text-primary { color: var(--color-primary); }
+
+/* Form Styles */
+.form-group {
+  margin-bottom: var(--space-20);
+}
+
+label {
+  display: block;
+  margin-bottom: var(--space-8);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+
+input[type="text"],
+input[type="number"],
+input[type="date"],
+input[type="time"],
+select,
+textarea {
+  width: 100%;
+  padding: var(--space-12);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  color: var(--color-text);
+  background-color: var(--color-cream-50);
+  transition: border-color 0.2s;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.form-row {
+    display: flex;
+    gap: var(--space-20);
+}
+
+.form-col {
+    flex: 1;
+}
+
+.action-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-12);
+    margin-top: var(--space-20);
+}
+
+/* Button Styles */
+.btn {
+  padding: var(--space-12) var(--space-20);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  transition: background-color 0.2s, transform 0.1s;
+  box-shadow: 0 2px 5px var(--color-shadow);
+}
+
+.btn-primary {
+  background-color: var(--color-primary);
+  color: var(--color-white);
+}
+
+.btn-primary:hover {
+  background-color: var(--color-brown-600);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background-color: var(--color-gray-200);
+  color: var(--color-text);
+}
+
+.btn-secondary:hover {
+  background-color: var(--color-gray-300);
+  transform: translateY(-1px);
+}
+
+.btn-icon {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-slate-500);
+    padding: var(--space-8);
+    border-radius: var(--radius-sm);
+    transition: color 0.2s, background-color 0.2s;
+}
+
+.btn-icon:hover {
+    color: var(--color-primary);
+    background-color: var(--color-gray-200);
+}
+
+.btn-icon.edit-icon { color: var(--color-info); }
+.btn-icon.delete-icon { color: var(--color-error); }
+
+/* Table Styles */
+.table-container {
+    overflow-x: auto;
+    margin-top: var(--space-20);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-base);
+}
+
+.data-table th, .data-table td {
+  padding: var(--space-12);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.data-table th {
+  background-color: var(--color-bg-tertiary);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary-dark);
+  text-transform: uppercase;
+  font-size: var(--font-size-sm);
+  letter-spacing: 0.5px;
+}
+
+.data-table tr:hover {
+  background-color: var(--color-cream-50);
+}
+
+/* Card/Panel Styles */
+.panel {
+    background-color: var(--color-bg-secondary);
+    border-radius: var(--radius-lg);
+    padding: var(--space-24);
+    box-shadow: 0 2px 8px var(--color-shadow);
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-20);
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: var(--space-8);
+}
+
+.section-header h3 {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-primary-dark);
+}
+
+/* Modals */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.4);
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background-color: var(--color-white);
+    padding: var(--space-24);
+    border-radius: var(--radius-xl);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+    width: 90%;
+    max-width: 800px;
+    position: relative;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: var(--space-16);
+    margin-bottom: var(--space-20);
+}
+
+.modal-header h2 {
+    font-size: var(--font-size-2xl);
+    color: var(--color-primary);
+}
+
+.close-btn {
+    color: var(--color-gray-400);
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-light);
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0;
+    line-height: 1;
+}
+
+.close-btn:hover {
+    color: var(--color-charcoal-700);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Schedule Grid for Employee Modal */
+.schedule-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-16);
+}
+
+.schedule-row {
+    display: flex;
+    gap: var(--space-8);
+    align-items: center;
+}
+
+.schedule-row input[type="time"],
+.schedule-row select {
+    flex: 1;
+}
+
+/* Toast Notification */
+.toast {
+    visibility: hidden;
+    min-width: 250px;
+    margin-left: -125px;
+    background-color: var(--color-primary-dark);
+    color: var(--color-white);
+    text-align: center;
+    border-radius: var(--radius-md);
+    padding: var(--space-16);
+    position: fixed;
+    z-index: 1001;
+    left: 50%;
+    bottom: var(--space-32);
+    font-size: var(--font-size-base);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.toast.show {
+    visibility: visible;
+    animation: slideIn 0.5s, fadeOut 0.5s 2.5s;
+}
+
+@keyframes slideIn {
+    from { bottom: 0; opacity: 0; }
+    to { bottom: var(--space-32); opacity: 1; }
+}
+
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .container {
+        padding: var(--space-24) var(--space-16);
+    }
+    .header .container {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: var(--space-16);
+    }
+    .user-info {
+        margin-top: var(--space-8);
+        align-items: flex-start;
+    }
+    .tabs {
+        overflow-x: auto;
+        justify-content: flex-start;
+        padding: 0;
+    }
+    .tab-button {
+        flex-shrink: 0;
+        font-size: var(--font-size-base);
+        padding: var(--space-12);
+    }
+    .tab-content {
+        padding: var(--space-16);
+    }
+    .form-row {
+        flex-direction: column;
+        gap: 0;
+    }
+    .schedule-grid {
+        grid-template-columns: 1fr;
+    }
+    .modal-content {
+        max-width: 95%;
+        margin: var(--space-20);
+    }
+    .action-buttons {
+        flex-direction: column-reverse;
+        gap: var(--space-8);
+    }
+    .action-buttons .btn {
+        width: 100%;
+        text-align: center;
+    }
+}
     </style>
+    <!-- Include Inter font for a professional look -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
-<body class="min-h-screen">
+<body>
 
-    <div class="header-shadow bg-white sticky top-0 z-10">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row justify-between items-center">
-            <h1 class="text-2xl font-extrabold tracking-tight" style="color: var(--color-primary);">
-                <span class="hidden sm:inline">Furniture Workshop</span> Payroll & Tracker
-            </h1>
-            <div class="flex items-center space-x-2 mt-2 sm:mt-0 text-sm text-gray-500">
-                <span id="authStatus" class="font-medium text-xs sm:text-sm">Initializing...</span>
-                <span id="userIdDisplay" class="truncate max-w-[150px] sm:max-w-none text-xs bg-gray-100 px-2 py-1 rounded-full"></span>
+    <header class="header">
+        <div class="container">
+            <h1>Furniture Workshop Payroll</h1>
+            <div class="user-info">
+                <p>App ID: <span id="displayAppId">...</span></p>
+                <p>User ID: <span id="displayUserId">...</span></p>
             </div>
         </div>
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-4 border-b border-gray-200">
-            <button class="tab-button py-2 text-sm sm:text-base px-3" data-tab="employees">Employees</button>
-            <button class="tab-button py-2 text-sm sm:text-base px-3" data-tab="attendance">Attendance</button>
-            <button class="tab-button py-2 text-sm sm:text-base px-3" data-tab="daily-labor">Daily Labor</button>
-            <button class="tab-button py-2 text-sm sm:text-base px-3" data-tab="advances">Advances</button>
-            <button class="tab-button py-2 text-sm sm:text-base px-3" data-tab="payroll">Payroll Report</button>
-            <button class="tab-button py-2 text-sm sm:text-base px-3" data-tab="settings">Data & Settings</button>
-        </div>
+    </header>
+
+    <div class="tabs">
+        <button class="tab-button active" onclick="switchTab('employees')">Employees</button>
+        <button class="tab-button" onclick="switchTab('attendance')">Attendance</button>
+        <button class="tab-button" onclick="switchTab('labor')">Daily Labor</button>
+        <button class="tab-button" onclick="switchTab('advances')">Advances</button>
+        <button class="tab-button" onclick="switchTab('payroll')">Payroll</button>
+        <button class="tab-button" onclick="switchTab('settings')">Settings & Backup</button>
     </div>
 
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <main class="container">
+        
         <!-- Employees Tab -->
-        <div id="tab-employees" class="tab-content" style="display: none;">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-semibold">Employee Management</h2>
-                <button class="btn-primary px-4 py-2 rounded-lg text-sm font-medium" onclick="openAddEmployeeModal()">+ Add New Employee</button>
+        <div id="employees" class="tab-content active panel">
+            <div class="section-header">
+                <h3>Employee Management</h3>
+                <button class="btn btn-primary" onclick="openAddEmployeeModal()">+ Add New Employee</button>
             </div>
-            <div class="bg-white shadow-lg rounded-xl overflow-x-auto">
-                <table class="w-full text-sm text-left text-gray-500 styled-table">
-                    <thead class="text-xs uppercase text-white" style="background-color: var(--color-primary);">
+            <div class="table-container">
+                <table class="data-table" id="employeesTable">
+                    <thead>
                         <tr>
-                            <th scope="col" class="px-6 py-3">ID</th>
-                            <th scope="col" class="px-6 py-3">Name</th>
-                            <th scope="col" class="px-6 py-3">Role</th>
-                            <th scope="col" class="px-6 py-3">Monthly Salary</th>
-                            <th scope="col" class="px-6 py-3">Status</th>
-                            <th scope="col" class="px-6 py-3">Actions</th>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Role</th>
+                            <th>Monthly Salary</th>
+                            <th>Hire Date</th>
+                            <th>Status</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
-                    <tbody id="employeeList">
-                        <!-- Employee rows will be injected here -->
+                    <tbody>
+                        <!-- Employee rows will be inserted here by JS -->
                     </tbody>
                 </table>
             </div>
         </div>
 
         <!-- Attendance Tab -->
-        <div id="tab-attendance" class="tab-content" style="display: none;">
-            <h2 class="text-xl font-semibold mb-6">Attendance Tracking</h2>
-            <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 mb-6 p-4 bg-white rounded-xl shadow-md">
-                <select id="attendanceEmployeeSelect" class="flex-grow p-2 border border-gray-300 rounded-lg text-sm"></select>
-                <input type="date" id="attendanceDate" class="p-2 border border-gray-300 rounded-lg text-sm">
-                <input type="time" id="attendanceTimeIn" class="p-2 border border-gray-300 rounded-lg text-sm">
-                <input type="time" id="attendanceTimeOut" class="p-2 border border-gray-300 rounded-lg text-sm">
-                <input type="number" id="attendanceBreak" placeholder="Break (mins)" min="0" class="p-2 border border-gray-300 rounded-lg text-sm w-24">
-                <button class="btn-primary px-4 py-2 rounded-lg text-sm font-medium" onclick="handleAttendanceRecord()">Record</button>
+        <div id="attendance" class="tab-content panel">
+            <div class="section-header">
+                <h3>Attendance Tracking</h3>
+                <button class="btn btn-primary" onclick="openAttendanceModal()">+ Record Attendance</button>
             </div>
-            <h3 class="text-lg font-medium mb-3">Attendance Records for: <span id="currentMonthDisplay" class="font-bold"></span></h3>
-            <div class="bg-white shadow-lg rounded-xl overflow-x-auto">
-                <table class="w-full text-sm text-left text-gray-500 styled-table">
-                    <thead class="text-xs uppercase text-white" style="background-color: var(--color-primary);">
+            
+            <div class="flex-row" style="gap: var(--space-8);">
+                <label for="attendanceMonthSelector" style="margin-bottom: 0;">Month:</label>
+                <input type="month" id="attendanceMonthSelector" value="" style="max-width: 150px; flex-grow: 0;">
+                <label for="attendanceEmployeeSelector" style="margin-bottom: 0;">Employee:</label>
+                <select id="attendanceEmployeeSelector" style="max-width: 200px; flex-grow: 0;">
+                    <!-- Options populated by JS -->
+                </select>
+                <button class="btn btn-secondary" onclick="exportAttendanceCSV()">Download CSV</button>
+            </div>
+
+            <div class="table-container">
+                <table class="data-table" id="attendanceTable">
+                    <thead>
                         <tr>
-                            <th scope="col" class="px-6 py-3">Employee</th>
-                            <th scope="col" class="px-6 py-3">Date</th>
-                            <th scope="col" class="px-6 py-3">Time In</th>
-                            <th scope="col" class="px-6 py-3">Time Out</th>
-                            <th scope="col" class="px-6 py-3">Net Hours</th>
-                            <th scope="col" class="px-6 py-3">Actions</th>
+                            <th>Date</th>
+                            <th>Employee</th>
+                            <th>Status</th>
+                            <th>Check-In</th>
+                            <th>Check-Out</th>
+                            <th>Net Hours</th>
+                            <th>Notes</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
-                    <tbody id="attendanceRecordsList">
-                        <!-- Attendance rows will be injected here -->
+                    <tbody>
+                        <!-- Attendance rows will be inserted here by JS -->
                     </tbody>
                 </table>
             </div>
         </div>
 
         <!-- Daily Labor Tab -->
-        <div id="tab-daily-labor" class="tab-content" style="display: none;">
-            <h2 class="text-xl font-semibold mb-6">Daily Labor Cost Tracker (Per-Day Wage)</h2>
-            <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 mb-6 p-4 bg-white rounded-xl shadow-md">
-                <input type="date" id="dailyLaborDate" class="p-2 border border-gray-300 rounded-lg text-sm">
-                <input type="text" id="dailyLaborName" placeholder="Laborer Name" class="flex-grow p-2 border border-gray-300 rounded-lg text-sm">
-                <input type="number" id="dailyLaborWage" placeholder="Daily Wage Amount" min="0" class="p-2 border border-gray-300 rounded-lg text-sm w-40">
-                <input type="text" id="dailyLaborDescription" placeholder="Description (e.g., job/project)" class="flex-grow p-2 border border-gray-300 rounded-lg text-sm">
-                <button class="btn-primary px-4 py-2 rounded-lg text-sm font-medium" onclick="addDailyLaborRecord()">Add Record</button>
+        <div id="labor" class="tab-content panel">
+            <div class="section-header">
+                <h3>Daily Labor/Job Tracking</h3>
+                <button class="btn btn-primary" onclick="openAddDailyLaborModal()">+ Add Daily Labor</button>
             </div>
-            <h3 class="text-lg font-medium mb-3">Daily Labor Records for: <span id="currentMonthLaborDisplay" class="font-bold"></span></h3>
-            <div class="bg-white shadow-lg rounded-xl overflow-x-auto">
-                <table class="w-full text-sm text-left text-gray-500 styled-table">
-                    <thead class="text-xs uppercase text-white" style="background-color: var(--color-primary);">
+            
+            <div class="flex-row" style="gap: var(--space-8);">
+                <label for="laborDateSelector" style="margin-bottom: 0;">Date:</label>
+                <input type="date" id="laborDateSelector" value="" style="max-width: 150px; flex-grow: 0;">
+                <button class="btn btn-secondary" id="downloadDailyLaborCSV">Download CSV (Daily)</button>
+            </div>
+
+            <div class="table-container">
+                <table class="data-table" id="dailyLaborTable">
+                    <thead>
                         <tr>
-                            <th scope="col" class="px-6 py-3">Date</th>
-                            <th scope="col" class="px-6 py-3">Laborer Name</th>
-                            <th scope="col" class="px-6 py-3">Daily Wage</th>
-                            <th scope="col" class="px-6 py-3">Description</th>
-                            <th scope="col" class="px-6 py-3">Actions</th>
+                            <th>Date</th>
+                            <th>Employee</th>
+                            <th>Job/Task</th>
+                            <th>Hours</th>
+                            <th>Rate</th>
+                            <th>Total Cost</th>
+                            <th>Notes</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
-                    <tbody id="dailyLaborRecordsList">
-                        <!-- Daily Labor rows will be injected here -->
+                    <tbody>
+                        <!-- Labor rows will be inserted here by JS -->
                     </tbody>
                 </table>
             </div>
         </div>
 
         <!-- Advances Tab -->
-        <div id="tab-advances" class="tab-content" style="display: none;">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-semibold">Employee Advances (Loans)</h2>
-                <button class="btn-primary px-4 py-2 rounded-lg text-sm font-medium" onclick="openAddAdvanceModal()">+ Record New Advance</button>
+        <div id="advances" class="tab-content panel">
+            <div class="section-header">
+                <h3>Employee Advances (Loans)</h3>
+                <button class="btn btn-primary" onclick="openAddAdvanceModal()">+ Record New Advance</button>
             </div>
-            <div class="bg-white shadow-lg rounded-xl overflow-x-auto">
-                <table class="w-full text-sm text-left text-gray-500 styled-table">
-                    <thead class="text-xs uppercase text-white" style="background-color: var(--color-primary);">
+
+            <div class="table-container">
+                <table class="data-table" id="advancesTable">
+                    <thead>
                         <tr>
-                            <th scope="col" class="px-6 py-3">Employee</th>
-                            <th scope="col" class="px-6 py-3">Amount</th>
-                            <th scope="col" class="px-6 py-3">Date Given</th>
-                            <th scope="col" class="px-6 py-3">Reason</th>
-                            <th scope="col" class="px-6 py-3">Status</th>
-                            <th scope="col" class="px-6 py-3">Deducted</th>
-                            <th scope="col" class="px-6 py-3">Notes</th>
-                            <th scope="col" class="px-6 py-3">Actions</th>
+                            <th>Employee</th>
+                            <th>Date Given</th>
+                            <th>Amount</th>
+                            <th>Reason</th>
+                            <th>Status</th>
+                            <th>Deducted</th>
+                            <th>Notes</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
-                    <tbody id="advancesList">
-                        <!-- Advance rows will be injected here -->
+                    <tbody>
+                        <!-- Advance rows will be inserted here by JS -->
                     </tbody>
                 </table>
             </div>
         </div>
 
         <!-- Payroll Tab -->
-        <div id="tab-payroll" class="tab-content" style="display: none;">
-            <h2 class="text-xl font-semibold mb-6">Monthly Payroll Report</h2>
-            <div class="flex space-x-4 mb-6 items-center">
-                <input type="month" id="payrollMonthSelector" class="p-2 border border-gray-300 rounded-lg text-sm">
-                <button class="btn-primary px-4 py-2 rounded-lg text-sm font-medium" onclick="generateReport()">Generate Report</button>
+        <div id="payroll" class="tab-content panel">
+            <div class="section-header">
+                <h3>Payroll Generation</h3>
             </div>
-
-            <div id="payrollReportOutput" class="space-y-8">
-                <!-- Report summary and tables will be injected here -->
-            </div>
-        </div>
-
-        <!-- Settings Tab -->
-        <div id="tab-settings" class="tab-content" style="display: none;">
-            <h2 class="text-xl font-semibold mb-6">Data & Export Settings</h2>
             
-            <div class="bg-white shadow-lg rounded-xl p-6 mb-8 space-y-4">
-                <h3 class="text-lg font-medium border-b pb-2">Export Data (CSV)</h3>
-                
-                <!-- Attendance Export -->
-                <div class="space-y-2">
-                    <p class="font-medium text-sm">Export Attendance Records</p>
-                    <div class="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-4">
-                        <select id="exportAttendanceEmployee" class="p-2 border border-gray-300 rounded-lg text-sm md:w-1/4"></select>
-                        <input type="date" id="exportAttendanceFrom" class="p-2 border border-gray-300 rounded-lg text-sm md:w-1/4">
-                        <span class="text-gray-500">to</span>
-                        <input type="date" id="exportAttendanceTo" class="p-2 border border-gray-300 rounded-lg text-sm md:w-1/4">
-                        <button class="btn-primary px-4 py-2 rounded-lg text-sm font-medium md:w-auto" onclick="exportAttendanceCSV()">Download Attendance</button>
-                    </div>
-                </div>
-
-                <!-- Daily Labor Export -->
-                <div class="space-y-2 pt-4">
-                    <p class="font-medium text-sm">Export Daily Labor Records</p>
-                    <div class="flex">
-                        <button class="btn-primary px-4 py-2 rounded-lg text-sm font-medium" onclick="exportDailyLaborCSV()">Download Daily Labor (All)</button>
-                    </div>
-                </div>
+            <div class="flex-row" style="gap: var(--space-8);">
+                <label for="payrollMonthSelector" style="margin-bottom: 0;">Month:</label>
+                <input type="month" id="payrollMonthSelector" value="" style="max-width: 150px; flex-grow: 0;">
+                <button class="btn btn-primary" onclick="generatePayroll()">Generate Payroll Report</button>
+                <button class="btn btn-secondary" onclick="exportPayrollCSV()">Download CSV (Monthly)</button>
             </div>
 
-            <div class="bg-white shadow-lg rounded-xl p-6 space-y-4">
-                <h3 class="text-lg font-medium border-b pb-2">Full Data Management</h3>
-                
-                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between">
-                    <p class="text-sm">Download a complete backup of all application data.</p>
-                    <button class="btn-primary px-4 py-2 rounded-lg text-sm font-medium mt-2 sm:mt-0" onclick="exportFullBackup()">Download Full Backup</button>
-                </div>
-
-                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between pt-4 border-t">
-                    <label for="backupFile" class="text-sm">Restore data from a backup file (JSON):</label>
-                    <input type="file" id="backupFile" accept=".json" class="text-sm mt-2 sm:mt-0">
-                    <button id="restoreBackupBtn" class="btn-secondary px-4 py-2 rounded-lg text-sm font-medium mt-2 sm:mt-0">Restore Backup</button>
+            <div id="payrollReportContainer">
+                <div class="table-container">
+                    <table class="data-table" id="payrollTable">
+                        <thead>
+                            <tr>
+                                <th>Employee</th>
+                                <th>Role</th>
+                                <th>Monthly Salary</th>
+                                <th>Working Days</th>
+                                <th>Total Days/Hours</th>
+                                <th>Total Salary Due</th>
+                                <th>Total Advances</th>
+                                <th>Net Pay</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Payroll rows will be inserted here by JS -->
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
+
+        <!-- Settings & Backup Tab -->
+        <div id="settings" class="tab-content panel">
+            <div class="section-header">
+                <h3>Settings and Data Management</h3>
+            </div>
+
+            <!-- Global Settings -->
+            <div class="panel" style="margin-bottom: var(--space-24);">
+                <h4 style="font-size: var(--font-size-lg); margin-bottom: var(--space-16); color: var(--color-primary);">Global Settings</h4>
+                <div class="form-row">
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="shopName">Shop Name</label>
+                            <input type="text" id="shopName" placeholder="e.g., The Woodwork Studio">
+                        </div>
+                    </div>
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="defaultCurrency">Default Currency Symbol</label>
+                            <input type="text" id="defaultCurrency" placeholder="e.g., ₹ or $">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="defaultWorkHours">Default Expected Daily Work Hours (for attendance calculation)</label>
+                    <input type="number" id="defaultWorkHours" min="1" max="15" value="10">
+                </div>
+                <div class="action-buttons">
+                    <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+                </div>
+            </div>
+
+            <!-- Data Backup -->
+            <div class="panel">
+                <h4 style="font-size: var(--font-size-lg); margin-bottom: var(--space-16); color: var(--color-primary);">Data Backup & Restore</h4>
+                <p style="margin-bottom: var(--space-16); font-size: var(--font-size-sm); color: var(--color-text-light);">
+                    You can download a full backup of all your data or restore from a previously saved backup file.
+                </p>
+                <div class="form-row">
+                    <div class="form-col">
+                        <button class="btn btn-primary" id="downloadFullBackup" style="width: 100%;">Download Full Backup (JSON)</button>
+                    </div>
+                    <div class="form-col">
+                        <input type="file" id="backupFileInput" accept=".json" style="padding: 0; border: none; background: none;">
+                        <button class="btn btn-secondary" id="restoreBackupBtn" style="width: 100%; margin-top: var(--space-8);">Restore Data from Backup</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </main>
 
-    <!-- Modal for Adding/Editing Employee -->
-    <div id="employeeModal" class="modal">
+    <!-- Modal for Employee (Add/Edit) -->
+    <div id="addEditEmployeeModal" class="modal">
         <div class="modal-content">
-            <div class="modal-header flex justify-between items-center border-b pb-3 mb-4">
-                <h2 id="employeeModalTitle" class="text-xl font-bold">Add New Employee</h2>
-                <button class="close-btn text-gray-500 hover:text-gray-800 text-2xl" onclick="closeEmployeeModal()">&times;</button>
+            <div class="modal-header">
+                <h2 id="employeeModalTitle">Add New Employee</h2>
+                <button class="close-btn" onclick="closeEditEmployeeModal()">&times;</button>
             </div>
-            <form id="employeeForm" class="space-y-4">
+            <form id="employeeForm">
                 <input type="hidden" id="employeeId">
-                <div>
-                    <label for="employeeName" class="block text-sm font-medium text-gray-700">Name</label>
-                    <input type="text" id="employeeName" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
-                </div>
-                <div>
-                    <label for="employeeRole" class="block text-sm font-medium text-gray-700">Role</label>
-                    <input type="text" id="employeeRole" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
-                </div>
-                <div>
-                    <label for="employeeSalary" class="block text-sm font-medium text-gray-700">Monthly Salary (INR)</label>
-                    <input type="number" id="employeeSalary" required min="0" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
-                </div>
-                <div>
-                    <label for="employeeHireDate" class="block text-sm font-medium text-gray-700">Hire Date</label>
-                    <input type="date" id="employeeHireDate" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
-                </div>
-                <div>
-                    <label for="employeeStatus" class="block text-sm font-medium text-gray-700">Status</label>
-                    <select id="employeeStatus" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
-                    </select>
-                </div>
-                <div class="pt-4 border-t mt-4">
-                    <h3 class="text-lg font-medium mb-3">Default Schedule (Net Hours will be automatically calculated)</h3>
-                    <div id="scheduleInputs" class="space-y-3">
-                        <!-- Schedule inputs generated here -->
+                <div class="form-row">
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="employeeName">Full Name</label>
+                            <input type="text" id="employeeName" required>
+                        </div>
+                    </div>
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="employeeRole">Role/Designation</label>
+                            <input type="text" id="employeeRole" required>
+                        </div>
                     </div>
                 </div>
-                <div class="flex justify-end space-x-3 pt-4">
-                    <button type="submit" class="btn-primary px-4 py-2 rounded-lg text-sm font-medium">Save Employee</button>
-                    <button type="button" class="btn-secondary px-4 py-2 rounded-lg text-sm font-medium" onclick="closeEmployeeModal()">Cancel</button>
+                <div class="form-row">
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="employeeMonthlySalary">Monthly Salary (0 for Daily Labor)</label>
+                            <input type="number" id="employeeMonthlySalary" min="0" required>
+                        </div>
+                    </div>
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="employeeHireDate">Hire Date</label>
+                            <input type="date" id="employeeHireDate" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="employeePhone">Phone Number</label>
+                            <input type="text" id="employeePhone" placeholder="Optional">
+                        </div>
+                    </div>
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="employeeStatus">Status</label>
+                            <select id="employeeStatus" required>
+                                <option value="Active">Active</option>
+                                <option value="Inactive">Inactive</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <h4 style="margin-top: var(--space-20); margin-bottom: var(--space-16); font-size: var(--font-size-lg); color: var(--color-secondary);">Default Schedule (Weekly)</h4>
+                <p style="font-size: var(--font-size-sm); color: var(--color-text-light); margin-bottom: var(--space-16);">Use 'Off' for non-working days. Net hours are calculated automatically.</p>
+                <div class="schedule-grid" id="scheduleGrid">
+                    <!-- Schedule rows will be inserted here by JS -->
+                </div>
+
+                <div class="action-buttons">
+                    <button type="submit" class="btn btn-primary">Save Employee</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeEditEmployeeModal()">Cancel</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Modal for Adding/Editing Advance -->
-    <div id="advanceModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header flex justify-between items-center border-b pb-3 mb-4">
-                <h2 id="advanceModalTitle" class="text-xl font-bold">Record Advance</h2>
-                <button class="close-btn text-gray-500 hover:text-gray-800 text-2xl" onclick="closeAdvanceModal()">&times;</button>
-            </div>
-            <form id="advanceForm" class="space-y-4">
-                <input type="hidden" id="advanceId">
-                <div>
-                    <label for="advanceEmployeeId" class="block text-sm font-medium text-gray-700">Employee</label>
-                    <select id="advanceEmployeeId" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
-                        <!-- Employee options populated here -->
-                    </select>
-                </div>
-                <div>
-                    <label for="advanceAmount" class="block text-sm font-medium text-gray-700">Amount (INR)</label>
-                    <input type="number" id="advanceAmount" required min="1" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
-                </div>
-                <div>
-                    <label for="advanceDate" class="block text-sm font-medium text-gray-700">Date Given</label>
-                    <input type="date" id="advanceDate" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
-                </div>
-                <div>
-                    <label for="advanceReason" class="block text-sm font-medium text-gray-700">Reason</label>
-                    <input type="text" id="advanceReason" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
-                </div>
-                <div id="advanceDeductionFields" style="display: none;">
-                    <div>
-                        <label for="advanceStatus" class="block text-sm font-medium text-gray-700">Status</label>
-                        <select id="advanceStatus" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
-                            <option value="Pending">Pending</option>
-                            <option value="Deducted">Deducted (Partially/Fully)</option>
-                            <option value="Cancelled">Cancelled</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="advanceAmountDeducted" class="block text-sm font-medium text-gray-700">Amount Deducted (Total so far)</label>
-                        <input type="number" id="advanceAmountDeducted" min="0" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
-                    </div>
-                    <div>
-                        <label for="advanceNotes" class="block text-sm font-medium text-gray-700">Notes (Deduction details, etc.)</label>
-                        <textarea id="advanceNotes" rows="2" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"></textarea>
-                    </div>
-                </div>
-                <div class="flex justify-end space-x-3 pt-4">
-                    <button type="submit" class="btn-primary px-4 py-2 rounded-lg text-sm font-medium">Save Advance</button>
-                    <button type="button" class="btn-secondary px-4 py-2 rounded-lg text-sm font-medium" onclick="closeAdvanceModal()">Cancel</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Delete Confirmation Modal (Generic) -->
-    <div id="deleteModal" class="modal">
+    <!-- Modal for Attendance (Record/Edit) -->
+    <div id="attendanceModal" class="modal">
         <div class="modal-content" style="max-width: 500px;">
-            <div class="modal-header flex justify-between items-center border-b pb-3 mb-4">
-                <h2 class="text-xl font-bold text-red-600">Confirm Deletion</h2>
-                <button class="close-btn text-gray-500 hover:text-gray-800 text-2xl" onclick="closeDeleteModal()">&times;</button>
+            <div class="modal-header">
+                <h2 id="attendanceModalTitle">Record Attendance</h2>
+                <button class="close-btn" onclick="closeAttendanceModal()">&times;</button>
             </div>
-            <div class="mb-6">
-                <p id="deleteMessage" class="text-gray-700 mb-4"></p>
-                <p class="text-sm font-medium text-red-600">This action cannot be undone and will permanently remove the record from the database.</p>
+            <form id="attendanceForm">
+                <input type="hidden" id="attendanceRecordId">
+                <div class="form-group">
+                    <label for="attendanceEmployee">Employee</label>
+                    <select id="attendanceEmployee" required>
+                        <!-- Options populated by JS -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="attendanceDate">Date</label>
+                    <input type="date" id="attendanceDate" required>
+                </div>
+                <div class="form-group">
+                    <label for="attendanceStatus">Status</label>
+                    <select id="attendanceStatus" required>
+                        <option value="Present">Present</option>
+                        <option value="Absent">Absent</option>
+                        <option value="Half Day">Half Day</option>
+                        <option value="Paid Leave">Paid Leave</option>
+                    </select>
+                </div>
+                <div id="timeInputs" class="form-row">
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="attendanceCheckIn">Check-In Time</label>
+                            <input type="time" id="attendanceCheckIn">
+                        </div>
+                    </div>
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="attendanceCheckOut">Check-Out Time</label>
+                            <input type="time" id="attendanceCheckOut">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="attendanceNotes">Notes</label>
+                    <textarea id="attendanceNotes" rows="3" placeholder="e.g., Reason for absence, specific job done..."></textarea>
+                </div>
+                <div class="action-buttons">
+                    <button type="submit" class="btn btn-primary">Save Attendance</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeAttendanceModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Daily Labor (Add/Edit) -->
+    <div id="dailyLaborModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2 id="dailyLaborModalTitle">Record Daily Labor</h2>
+                <button class="close-btn" onclick="closeDailyLaborModal()">&times;</button>
             </div>
-            <div class="flex justify-end space-x-3">
-                <button class="btn-secondary px-4 py-2 rounded-lg text-sm font-medium" onclick="closeDeleteModal()">Cancel</button>
-                <button class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium" id="confirmDeleteBtn">Delete Permanently</button>
+            <form id="dailyLaborForm">
+                <input type="hidden" id="dailyLaborId">
+                <div class="form-group">
+                    <label for="dailyLaborEmployee">Employee (Daily Wage)</label>
+                    <select id="dailyLaborEmployee" required>
+                        <!-- Options populated by JS -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="dailyLaborDate">Date</label>
+                    <input type="date" id="dailyLaborDate" required>
+                </div>
+                <div class="form-group">
+                    <label for="dailyLaborTask">Job/Task Description</label>
+                    <input type="text" id="dailyLaborTask" required placeholder="e.g., Assembling cabinet doors">
+                </div>
+                <div class="form-row">
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="dailyLaborHours">Hours Worked</label>
+                            <input type="number" id="dailyLaborHours" min="0" step="0.5" required>
+                        </div>
+                    </div>
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="dailyLaborRate">Hourly Rate (per employee)</label>
+                            <input type="number" id="dailyLaborRate" min="0" step="1" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="dailyLaborNotes">Notes (Optional)</label>
+                    <textarea id="dailyLaborNotes" rows="2"></textarea>
+                </div>
+                <div class="action-buttons">
+                    <button type="submit" class="btn btn-primary">Save Labor Record</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeDailyLaborModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Advance (Add/Edit) -->
+    <div id="addEditAdvanceModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2 id="advanceModalTitle">Record New Advance</h2>
+                <button class="close-btn" onclick="closeEditAdvanceModal()">&times;</button>
+            </div>
+            <form id="advanceForm">
+                <input type="hidden" id="advanceId">
+                <div class="form-group">
+                    <label for="advanceEmployee">Employee</label>
+                    <select id="advanceEmployee" required>
+                        <!-- Options populated by JS -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="advanceDate">Date Given</label>
+                    <input type="date" id="advanceDate" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="advanceAmount">Amount</label>
+                            <input type="number" id="advanceAmount" min="1" required>
+                        </div>
+                    </div>
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="advanceStatus">Status</label>
+                            <select id="advanceStatus" required onchange="toggleAdvanceDeductionInput(this.value)">
+                                <option value="Pending">Pending</option>
+                                <option value="Deducted">Deducted</option>
+                                <option value="Cancelled">Cancelled</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group" id="deductionAmountGroup" style="display: none;">
+                    <label for="advanceAmountDeducted">Amount Deducted This Month</label>
+                    <input type="number" id="advanceAmountDeducted" min="0" step="1">
+                </div>
+                <div class="form-group">
+                    <label for="advanceReason">Reason for Advance</label>
+                    <input type="text" id="advanceReason" required>
+                </div>
+                <div class="form-group">
+                    <label for="advanceNotes">Notes (Optional)</label>
+                    <textarea id="advanceNotes" rows="2"></textarea>
+                </div>
+                <div class="action-buttons">
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeEditAdvanceModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Delete Employee Confirmation (New Modal) -->
+    <div id="deleteEmployeeModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>Confirm Employee Deletion</h2>
+                <button class="close-btn" onclick="closeDeleteEmployeeModal()">&times;</button>
+            </div>
+            <div style="margin-bottom: var(--space-24);">
+                <p id="deleteEmployeeMessage" style="color: var(--color-text); margin-bottom: var(--space-16);"></p>
+                <p style="color: var(--color-error); font-weight: var(--font-weight-medium); font-size: var(--font-size-sm);">This action will permanently remove the employee and cannot be undone.</p>
+            </div>
+            <div class="action-buttons">
+                <button class="btn btn-primary" style="background: var(--color-error);" onclick="confirmDeleteEmployee()">Delete Employee</button>
+                <button class="btn btn-secondary" onclick="closeDeleteEmployeeModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Advance Confirmation -->
+    <div id="deleteAdvanceModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>Confirm Delete</h2>
+                <button class="close-btn" onclick="closeDeleteAdvanceModal()">&times;</button>
+            </div>
+            <div style="margin-bottom: var(--space-24);">
+                <p id="deleteAdvanceMessage" style="color: var(--color-text); margin-bottom: var(--space-16);"></p>
+                <p style="color: var(--color-error); font-weight: var(--font-weight-medium); font-size: var(--font-size-sm);">This action cannot be undone.</p>
+            </div>
+            <div class="action-buttons">
+                <button class="btn btn-primary" style="background: var(--color-error);" onclick="confirmDeleteAdvance()">Delete Advance</button>
+                <button class="btn btn-secondary" onclick="closeDeleteAdvanceModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Attendance Confirmation -->
+    <div id="deleteAttendanceModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>Confirm Delete</h2>
+                <button class="close-btn" onclick="closeDeleteAttendanceModal()">&times;</button>
+            </div>
+            <div style="margin-bottom: var(--space-24);">
+                <p id="deleteAttendanceMessage" style="color: var(--color-text); margin-bottom: var(--space-16);"></p>
+                <p style="color: var(--color-error); font-weight: var(--font-weight-medium); font-size: var(--font-size-sm);">This action cannot be undone.</p>
+            </div>
+            <div class="action-buttons">
+                <button class="btn btn-primary" style="background: var(--color-error);" onclick="confirmDeleteAttendance()">Delete Attendance</button>
+                <button class="btn btn-secondary" onclick="closeDeleteAttendanceModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Daily Labor Confirmation -->
+    <div id="deleteDailyLaborModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>Confirm Delete</h2>
+                <button class="close-btn" onclick="closeDeleteDailyLaborModal()">&times;</button>
+            </div>
+            <div style="margin-bottom: var(--space-24);">
+                <p id="deleteDailyLaborMessage" style="color: var(--color-text); margin-bottom: var(--space-16);"></p>
+                <p style="color: var(--color-error); font-weight: var(--font-weight-medium); font-size: var(--font-size-sm);">This action cannot be undone.</p>
+            </div>
+            <div class="action-buttons">
+                <button class="btn btn-primary" style="background: var(--color-error);" onclick="confirmDeleteDailyLabor()">Delete Labor Record</button>
+                <button class="btn btn-secondary" onclick="closeDeleteDailyLaborModal()">Cancel</button>
             </div>
         </div>
     </div>
@@ -448,1404 +1049,6 @@
     <!-- Success Toast -->
     <div id="successToast" class="toast"></div>
 
-    <!-- Firebase SDK Imports and App Logic -->
-    <script type="module">
-        // Import Firebase Functions
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { 
-            getFirestore, 
-            doc, 
-            getDoc, 
-            addDoc, 
-            setDoc, 
-            updateDoc, 
-            deleteDoc, 
-            onSnapshot, 
-            collection, 
-            query, 
-            where, 
-            writeBatch,
-            serverTimestamp
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        
-        // Use Debug logging for development
-        setLogLevel('Debug');
-
-        // --- GLOBAL VARIABLES & FIREBASE SETUP ---
-        let employees = [];
-        let attendanceRecords = [];
-        let advances = [];
-        let dailyLabor = [];
-        let selectedMonth = new Date().toISOString().substring(0, 7); // YYYY-MM
-
-        let db, auth;
-        let userId = null;
-        let isAuthReady = false;
-
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-        const COLLECTIONS = {
-            EMPLOYEES: 'employees',
-            ATTENDANCE: 'attendanceRecords',
-            ADVANCES: 'advances',
-            DAILY_LABOR: 'dailyLabor'
-        };
-        
-        // --- UTILITY FUNCTIONS ---
-
-        /**
-         * Generates the Firestore collection path for a user's private data.
-         * @param {string} collectionName
-         * @returns {string} The full Firestore path.
-         */
-        function getCollectionPath(collectionName) {
-            return `/artifacts/${appId}/users/${userId}/${collectionName}`;
-        }
-
-        /**
-         * Displays a success message toast.
-         * @param {string} message 
-         */
-        function showToast(message) {
-            const toast = document.getElementById('successToast');
-            toast.textContent = message;
-            toast.className = "toast show";
-            setTimeout(function(){ toast.className = toast.className.replace("show", ""); }, 3000);
-        }
-
-        /**
-         * Calculates the net working hours from time-in, time-out, and break duration.
-         * @param {string} start Time string (HH:MM)
-         * @param {string} end Time string (HH:MM)
-         * @param {number} breakMins Break duration in minutes
-         * @returns {number} Net hours worked (e.g., 10.5 for 10 hours 30 mins)
-         */
-        function calculateTimeDifference(start, end, breakMins) {
-            if (!start || !end) return 0;
-            const parseTime = (time) => {
-                const [h, m] = time.split(':').map(Number);
-                return h * 60 + m; // Total minutes
-            };
-            
-            const startMins = parseTime(start);
-            let endMins = parseTime(end);
-
-            // Handle overnight shifts (if end time is earlier than start time, assume it's the next day)
-            if (endMins < startMins) {
-                endMins += 24 * 60;
-            }
-
-            const totalDurationMins = endMins - startMins;
-            const netMins = totalDurationMins - (breakMins || 0);
-            
-            return Math.max(0, netMins) / 60; // Net hours
-        }
-
-        /**
-         * Formats a number as Indian Rupees (INR).
-         * @param {number} amount 
-         * @returns {string} Formatted currency string.
-         */
-        function formatCurrency(amount) {
-            if (amount === null || isNaN(amount)) return '₹ 0';
-            return new Intl.NumberFormat('en-IN', {
-                style: 'currency',
-                currency: 'INR',
-                maximumFractionDigits: 0
-            }).format(amount);
-        }
-
-        /**
-         * Generic Modal Functions
-         */
-        let currentDeleteFn = null;
-
-        function openDeleteModal(message, deleteFn) {
-            document.getElementById('deleteMessage').textContent = message;
-            currentDeleteFn = deleteFn;
-            document.getElementById('confirmDeleteBtn').onclick = () => {
-                if (currentDeleteFn) {
-                    currentDeleteFn();
-                }
-                closeDeleteModal();
-            };
-            document.getElementById('deleteModal').style.display = 'block';
-        }
-
-        function closeDeleteModal() {
-            document.getElementById('deleteModal').style.display = 'none';
-            currentDeleteFn = null;
-        }
-
-
-        // --- FIREBASE INITIALIZATION & AUTHENTICATION ---
-
-        async function initFirebase() {
-            if (!firebaseConfig) {
-                console.error("Firebase config is missing. Cannot initialize Firestore.");
-                document.getElementById('authStatus').textContent = "Error: Firebase Config Missing";
-                return;
-            }
-
-            const app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            auth = getAuth(app);
-
-            try {
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    // Fallback to anonymous sign-in if token is missing
-                    await signInAnonymously(auth);
-                }
-                
-                onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        userId = user.uid;
-                        isAuthReady = true;
-                        document.getElementById('authStatus').textContent = "Status: Online";
-                        document.getElementById('userIdDisplay').textContent = `User ID: ${userId}`;
-                        // Start real-time data listeners only after successful sign-in
-                        setupRealtimeListeners();
-                        // Load initial UI based on default tab
-                        showTab(document.querySelector('.tab-button').getAttribute('data-tab'));
-                    } else {
-                        // User is signed out (this shouldn't typically happen in this environment)
-                        userId = 'anonymous'; // Fallback
-                        document.getElementById('authStatus').textContent = "Status: Anonymous";
-                        document.getElementById('userIdDisplay').textContent = `User ID: ${userId} (Anon)`;
-                        isAuthReady = true; // Still ready, even if anon
-                    }
-                });
-
-            } catch (error) {
-                console.error("Firebase Authentication failed:", error);
-                // Fallback for user ID if auth fails completely
-                userId = crypto.randomUUID();
-                isAuthReady = true;
-                document.getElementById('authStatus').textContent = `Error: Auth Failed. Using Temp ID.`;
-                document.getElementById('userIdDisplay').textContent = `Temp ID: ${userId.substring(0, 8)}...`;
-                setupRealtimeListeners();
-                showTab(document.querySelector('.tab-button').getAttribute('data-tab'));
-            }
-        }
-
-        /**
-         * Sets up real-time listeners for all four data collections.
-         */
-        function setupRealtimeListeners() {
-            if (!db || !userId) {
-                console.error("Database or User ID not available for listeners.");
-                return;
-            }
-
-            // 1. Employees Listener
-            onSnapshot(collection(db, getCollectionPath(COLLECTIONS.EMPLOYEES)), (snapshot) => {
-                employees = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                console.log('Employees updated:', employees.length);
-                renderEmployeeList();
-                populateModalSelects(); // Update selects whenever employees change
-            }, (error) => {
-                console.error("Error fetching employees:", error);
-            });
-
-            // 2. Attendance Listener
-            onSnapshot(collection(db, getCollectionPath(COLLECTIONS.ATTENDANCE)), (snapshot) => {
-                attendanceRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                console.log('Attendance updated:', attendanceRecords.length);
-                renderAttendanceRecords();
-            }, (error) => {
-                console.error("Error fetching attendance:", error);
-            });
-
-            // 3. Advances Listener
-            onSnapshot(collection(db, getCollectionPath(COLLECTIONS.ADVANCES)), (snapshot) => {
-                advances = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                console.log('Advances updated:', advances.length);
-                renderAdvancesList();
-            }, (error) => {
-                console.error("Error fetching advances:", error);
-            });
-
-            // 4. Daily Labor Listener
-            onSnapshot(collection(db, getCollectionPath(COLLECTIONS.DAILY_LABOR)), (snapshot) => {
-                dailyLabor = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                console.log('Daily Labor updated:', dailyLabor.length);
-                renderDailyLaborRecords();
-            }, (error) => {
-                console.error("Error fetching daily labor:", error);
-            });
-            
-            // Set initial dates for filters/reports
-            const today = new Date().toISOString().split('T')[0];
-            const currentMonth = today.substring(0, 7);
-            
-            document.getElementById('attendanceDate').value = today;
-            document.getElementById('dailyLaborDate').value = today;
-            document.getElementById('payrollMonthSelector').value = currentMonth;
-            selectedMonth = currentMonth;
-            
-            populateExportFilters();
-        }
-
-        // --- EMPLOYEE FUNCTIONS (CRUD) ---
-
-        /**
-         * Renders the employee list table.
-         */
-        function renderEmployeeList() {
-            const listBody = document.getElementById('employeeList');
-            if (!listBody) return;
-
-            listBody.innerHTML = employees.sort((a, b) => a.name.localeCompare(b.name)).map(emp => {
-                return `
-                    <tr class="bg-white border-b hover:bg-gray-50">
-                        <td class="px-6 py-3 font-medium text-gray-900">${emp.customId || 'N/A'}</td>
-                        <td class="px-6 py-3">${emp.name}</td>
-                        <td class="px-6 py-3">${emp.role}</td>
-                        <td class="px-6 py-3">${formatCurrency(emp.salary_monthly)}</td>
-                        <td class="px-6 py-3">
-                            <span class="px-3 py-1 text-xs font-medium rounded-full ${emp.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
-                                ${emp.status}
-                            </span>
-                        </td>
-                        <td class="px-6 py-3 space-x-2 whitespace-nowrap">
-                            <button class="text-indigo-600 hover:text-indigo-900 font-medium text-sm" onclick="openEditEmployeeModal('${emp.id}')">Edit</button>
-                            <button class="text-red-600 hover:text-red-900 font-medium text-sm" onclick="promptDeleteEmployee('${emp.id}', '${emp.name}')">Delete</button>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
-        }
-        
-        /**
-         * Handles the submission of the employee form (Add/Edit).
-         * @param {Event} event 
-         */
-        async function handleEmployeeFormSubmit(event) {
-            event.preventDefault();
-
-            if (!isAuthReady) {
-                showToast("Data service not ready. Please wait a moment.");
-                return;
-            }
-
-            const id = document.getElementById('employeeId').value;
-            const name = document.getElementById('employeeName').value.trim();
-            const role = document.getElementById('employeeRole').value.trim();
-            const salary_monthly = parseFloat(document.getElementById('employeeSalary').value);
-            const hire_date = document.getElementById('employeeHireDate').value;
-            const status = document.getElementById('employeeStatus').value;
-
-            const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-            const schedule = {};
-            days.forEach(day => {
-                const dayType = document.getElementById(`${day}Type`).value;
-                if (dayType === 'off') {
-                    schedule[day] = 'off';
-                } else {
-                    const start = document.getElementById(`${day}Start`).value;
-                    const end = document.getElementById(`${day}End`).value;
-                    const breakMins = parseFloat(document.getElementById(`${day}Break`).value) || 0;
-                    const net_hours = calculateTimeDifference(start, end, breakMins);
-                    schedule[day] = { start, end, break_mins: breakMins, net_hours };
-                }
-            });
-
-            // Calculate expected monthly hours (assuming 4 weeks * 5 days, adjust as needed for furniture workshop standards)
-            const activeDays = days.filter(day => schedule[day] !== 'off').length;
-            const totalWeeklyHours = days.reduce((sum, day) => {
-                const sch = schedule[day];
-                return sum + (sch !== 'off' ? sch.net_hours : 0);
-            }, 0);
-            
-            // Assuming 4.33 weeks per month on average (52/12)
-            const expected_monthly_hours = Math.round(totalWeeklyHours * 4.33);
-
-            const employeeData = {
-                name,
-                role,
-                salary_monthly,
-                hire_date,
-                status,
-                schedule,
-                expected_monthly_hours,
-                created_at: serverTimestamp(),
-                // customId: (id === '' ? employees.length + 1 : employees.find(e => e.id === id)?.customId) || employees.length + 1 // Use existing or generate new customId
-            };
-            
-            // Find the highest customId used and generate a sequential one if adding a new employee
-            const nextCustomId = employees.length > 0 
-                ? Math.max(...employees.map(e => e.customId || 0)) + 1 
-                : 1;
-
-            if (id) {
-                // EDIT Existing Employee
-                try {
-                    const employeeRef = doc(db, getCollectionPath(COLLECTIONS.EMPLOYEES), id);
-                    await updateDoc(employeeRef, employeeData);
-                    showToast(`Employee ${name} updated successfully!`);
-                } catch (e) {
-                    console.error("Error updating employee: ", e);
-                    showToast("Error updating employee. Check console.");
-                }
-            } else {
-                // ADD New Employee
-                try {
-                    employeeData.customId = nextCustomId; // Assign new ID
-                    employeeData.salary_history = [{date: hire_date, salary: salary_monthly, reason: "Initial hire"}];
-                    const docRef = await addDoc(collection(db, getCollectionPath(COLLECTIONS.EMPLOYEES)), employeeData);
-                    showToast(`Employee ${name} added successfully! (ID: ${docRef.id})`);
-                } catch (e) {
-                    console.error("Error adding employee: ", e);
-                    showToast("Error adding employee. Check console.");
-                }
-            }
-
-            closeEmployeeModal();
-        }
-        
-        /**
-         * Prompts the user to confirm deletion of an employee.
-         * @param {string} id Firestore Document ID
-         * @param {string} name Employee name
-         */
-        function promptDeleteEmployee(id, name) {
-            openDeleteModal(`Are you sure you want to delete employee: ${name}? This will also delete all associated attendance and advance records.`, 
-                () => deleteEmployee(id));
-        }
-
-        /**
-         * Deletes an employee and their associated records (attendance, advances) using a batch write.
-         * @param {string} employeeId Firestore Document ID
-         */
-        async function deleteEmployee(employeeId) {
-            if (!isAuthReady) return;
-
-            const employee = employees.find(e => e.id === employeeId);
-            if (!employee) return;
-
-            const batch = writeBatch(db);
-            const employeeRef = doc(db, getCollectionPath(COLLECTIONS.EMPLOYEES), employeeId);
-            
-            // 1. Delete Employee
-            batch.delete(employeeRef);
-
-            // 2. Delete related Attendance Records
-            const attendanceQuery = query(collection(db, getCollectionPath(COLLECTIONS.ATTENDANCE)), where("employee_id", "==", employeeId));
-            const attendanceSnapshot = await getDocs(attendanceQuery);
-            attendanceSnapshot.forEach((doc) => {
-                batch.delete(doc.ref);
-            });
-
-            // 3. Delete related Advances
-            const advancesQuery = query(collection(db, getCollectionPath(COLLECTIONS.ADVANCES)), where("employee_id", "==", employeeId));
-            const advancesSnapshot = await getDocs(advancesQuery);
-            advancesSnapshot.forEach((doc) => {
-                batch.delete(doc.ref);
-            });
-
-            try {
-                await batch.commit();
-                showToast(`Employee ${employee.name} and all associated records deleted.`);
-            } catch (e) {
-                console.error("Error batch deleting records: ", e);
-                showToast("Error deleting employee and records. Check console.");
-            }
-        }
-
-        // --- ATTENDANCE FUNCTIONS (CRUD) ---
-
-        /**
-         * Populates the employee select dropdown for the attendance tab.
-         */
-        function populateAttendanceSelect() {
-            const select = document.getElementById('attendanceEmployeeSelect');
-            if (!select) return;
-            select.innerHTML = employees.filter(e => e.status === 'Active')
-                .map(emp => `<option value="${emp.id}">${emp.name} (${emp.role})</option>`).join('');
-            
-            // Add a blank option if no active employees exist
-            if (employees.filter(e => e.status === 'Active').length === 0) {
-                 select.innerHTML = '<option value="">-- No Active Employees --</option>';
-            }
-        }
-
-        /**
-         * Renders attendance records filtered by the currently selected month.
-         */
-        function renderAttendanceRecords() {
-            populateAttendanceSelect();
-            document.getElementById('currentMonthDisplay').textContent = selectedMonth;
-
-            const filteredRecords = attendanceRecords
-                .filter(rec => rec.date.startsWith(selectedMonth))
-                .sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort descending by date
-
-            const listBody = document.getElementById('attendanceRecordsList');
-            if (!listBody) return;
-
-            listBody.innerHTML = filteredRecords.map(rec => {
-                const employee = employees.find(e => e.id === rec.employee_id);
-                const employeeName = employee ? employee.name : 'Unknown Employee';
-
-                return `
-                    <tr class="bg-white border-b hover:bg-gray-50">
-                        <td class="px-6 py-3 font-medium text-gray-900">${employeeName}</td>
-                        <td class="px-6 py-3">${rec.date}</td>
-                        <td class="px-6 py-3">${rec.time_in}</td>
-                        <td class="px-6 py-3">${rec.time_out}</td>
-                        <td class="px-6 py-3 font-semibold">${rec.net_hours.toFixed(2)} hrs</td>
-                        <td class="px-6 py-3 space-x-2 whitespace-nowrap">
-                            <button class="text-red-600 hover:text-red-900 font-medium text-sm" onclick="promptDeleteAttendance('${rec.id}', '${employeeName} on ${rec.date}')">Delete</button>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
-        }
-
-        /**
-         * Adds a new attendance record or updates an existing one for the same employee/date.
-         */
-        async function handleAttendanceRecord() {
-            if (!isAuthReady) return;
-
-            const employee_id = document.getElementById('attendanceEmployeeSelect').value;
-            const date = document.getElementById('attendanceDate').value;
-            const time_in = document.getElementById('attendanceTimeIn').value;
-            const time_out = document.getElementById('attendanceTimeOut').value;
-            const break_mins = parseFloat(document.getElementById('attendanceBreak').value) || 0;
-            
-            if (!employee_id || !date || !time_in || !time_out) {
-                showToast("Please fill out employee, date, time in, and time out.");
-                return;
-            }
-
-            const net_hours = calculateTimeDifference(time_in, time_out, break_mins);
-            if (net_hours <= 0) {
-                showToast("Calculated net hours is zero or negative. Check times/break.");
-                return;
-            }
-
-            const recordData = {
-                employee_id,
-                date,
-                time_in,
-                time_out,
-                break_mins,
-                net_hours,
-                created_at: serverTimestamp()
-            };
-
-            // Check if a record already exists for this employee/date
-            const existingRecord = attendanceRecords.find(r => r.employee_id === employee_id && r.date === date);
-
-            try {
-                if (existingRecord) {
-                    // Update existing record
-                    const recordRef = doc(db, getCollectionPath(COLLECTIONS.ATTENDANCE), existingRecord.id);
-                    await updateDoc(recordRef, recordData);
-                    showToast("Attendance record updated successfully!");
-                } else {
-                    // Add new record
-                    await addDoc(collection(db, getCollectionPath(COLLECTIONS.ATTENDANCE)), recordData);
-                    showToast("Attendance record added successfully!");
-                }
-            } catch (e) {
-                console.error("Error saving attendance record:", e);
-                showToast("Error saving attendance record. Check console.");
-            }
-        }
-        
-        /**
-         * Prompts the user to confirm deletion of an attendance record.
-         * @param {string} id Firestore Document ID
-         * @param {string} recordInfo Record details for the message
-         */
-        function promptDeleteAttendance(id, recordInfo) {
-            openDeleteModal(`Are you sure you want to delete the attendance record for ${recordInfo}?`, 
-                () => deleteAttendance(id));
-        }
-
-        /**
-         * Deletes an attendance record.
-         * @param {string} id Firestore Document ID
-         */
-        async function deleteAttendance(id) {
-            if (!isAuthReady) return;
-            try {
-                await deleteDoc(doc(db, getCollectionPath(COLLECTIONS.ATTENDANCE), id));
-                showToast("Attendance record deleted.");
-            } catch (e) {
-                console.error("Error deleting attendance record:", e);
-                showToast("Error deleting attendance record. Check console.");
-            }
-        }
-
-        // --- DAILY LABOR FUNCTIONS (CRUD) ---
-        
-        /**
-         * Renders daily labor records filtered by the currently selected month.
-         */
-        function renderDailyLaborRecords() {
-            document.getElementById('currentMonthLaborDisplay').textContent = selectedMonth;
-
-            const filteredRecords = dailyLabor
-                .filter(rec => rec.date.startsWith(selectedMonth))
-                .sort((a, b) => new Date(b.date) - new Date(a.date));
-
-            const listBody = document.getElementById('dailyLaborRecordsList');
-            if (!listBody) return;
-
-            listBody.innerHTML = filteredRecords.map(rec => {
-                return `
-                    <tr class="bg-white border-b hover:bg-gray-50">
-                        <td class="px-6 py-3">${rec.date}</td>
-                        <td class="px-6 py-3 font-medium text-gray-900">${rec.name}</td>
-                        <td class="px-6 py-3">${formatCurrency(rec.wage)}</td>
-                        <td class="px-6 py-3 max-w-xs truncate">${rec.description}</td>
-                        <td class="px-6 py-3 space-x-2 whitespace-nowrap">
-                            <button class="text-red-600 hover:text-red-900 font-medium text-sm" onclick="promptDeleteDailyLabor('${rec.id}', '${rec.name} on ${rec.date}')">Delete</button>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
-        }
-        
-        /**
-         * Adds a new daily labor record.
-         */
-        async function addDailyLaborRecord() {
-            if (!isAuthReady) return;
-
-            const date = document.getElementById('dailyLaborDate').value;
-            const name = document.getElementById('dailyLaborName').value.trim();
-            const wage = parseFloat(document.getElementById('dailyLaborWage').value) || 0;
-            const description = document.getElementById('dailyLaborDescription').value.trim();
-
-            if (!date || !name || wage <= 0) {
-                showToast("Please enter a valid date, laborer name, and a wage greater than zero.");
-                return;
-            }
-
-            const recordData = {
-                date,
-                name,
-                wage,
-                description,
-                created_at: serverTimestamp()
-            };
-
-            try {
-                await addDoc(collection(db, getCollectionPath(COLLECTIONS.DAILY_LABOR)), recordData);
-                showToast("Daily labor record added successfully!");
-                // Clear inputs
-                document.getElementById('dailyLaborName').value = '';
-                document.getElementById('dailyLaborWage').value = '';
-                document.getElementById('dailyLaborDescription').value = '';
-                document.getElementById('dailyLaborDate').value = new Date().toISOString().split('T')[0];
-            } catch (e) {
-                console.error("Error adding daily labor record:", e);
-                showToast("Error adding daily labor record. Check console.");
-            }
-        }
-        
-        /**
-         * Prompts the user to confirm deletion of a daily labor record.
-         * @param {string} id Firestore Document ID
-         * @param {string} recordInfo Record details for the message
-         */
-        function promptDeleteDailyLabor(id, recordInfo) {
-            openDeleteModal(`Are you sure you want to delete the daily labor record for ${recordInfo}?`, 
-                () => deleteDailyLabor(id));
-        }
-
-        /**
-         * Deletes a daily labor record.
-         * @param {string} id Firestore Document ID
-         */
-        async function deleteDailyLabor(id) {
-            if (!isAuthReady) return;
-            try {
-                await deleteDoc(doc(db, getCollectionPath(COLLECTIONS.DAILY_LABOR), id));
-                showToast("Daily labor record deleted.");
-            } catch (e) {
-                console.error("Error deleting daily labor record:", e);
-                showToast("Error deleting daily labor record. Check console.");
-            }
-        }
-
-
-        // --- ADVANCES FUNCTIONS (CRUD) ---
-
-        /**
-         * Renders the advances list table.
-         */
-        function renderAdvancesList() {
-            const listBody = document.getElementById('advancesList');
-            if (!listBody) return;
-
-            listBody.innerHTML = advances.sort((a, b) => new Date(b.date_given) - new Date(a.date_given)).map(adv => {
-                const employee = employees.find(e => e.id === adv.employee_id);
-                const employeeName = employee ? employee.name : 'Unknown Employee';
-                const remainingAmount = adv.amount - (adv.amount_deducted || 0);
-                
-                let statusClass = 'bg-yellow-100 text-yellow-800';
-                if (adv.status === 'Deducted' && remainingAmount <= 0) {
-                    statusClass = 'bg-green-100 text-green-800';
-                } else if (adv.status === 'Cancelled') {
-                    statusClass = 'bg-gray-100 text-gray-800';
-                }
-
-                return `
-                    <tr class="bg-white border-b hover:bg-gray-50">
-                        <td class="px-6 py-3 font-medium text-gray-900">${employeeName}</td>
-                        <td class="px-6 py-3">${formatCurrency(adv.amount)}</td>
-                        <td class="px-6 py-3">${adv.date_given}</td>
-                        <td class="px-6 py-3 max-w-xs truncate">${adv.reason || 'N/A'}</td>
-                        <td class="px-6 py-3">
-                            <span class="px-3 py-1 text-xs font-medium rounded-full ${statusClass}">
-                                ${adv.status} ${remainingAmount > 0 ? `(${formatCurrency(remainingAmount)} left)` : ''}
-                            </span>
-                        </td>
-                        <td class="px-6 py-3">${formatCurrency(adv.amount_deducted || 0)}</td>
-                        <td class="px-6 py-3 max-w-xs truncate">${adv.notes || 'N/A'}</td>
-                        <td class="px-6 py-3 space-x-2 whitespace-nowrap">
-                            <button class="text-indigo-600 hover:text-indigo-900 font-medium text-sm" onclick="openEditAdvanceModal('${adv.id}')">Edit</button>
-                            <button class="text-red-600 hover:text-red-900 font-medium text-sm" onclick="promptDeleteAdvance('${adv.id}', '${employeeName}')">Delete</button>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
-        }
-
-        /**
-         * Handles the submission of the advance form (Add/Edit).
-         * @param {Event} event 
-         */
-        async function handleAdvanceFormSubmit(event) {
-            event.preventDefault();
-            if (!isAuthReady) return;
-
-            const id = document.getElementById('advanceId').value;
-            const employee_id = document.getElementById('advanceEmployeeId').value;
-            const amount = parseFloat(document.getElementById('advanceAmount').value);
-            const date_given = document.getElementById('advanceDate').value;
-            const reason = document.getElementById('advanceReason').value.trim();
-            const status = document.getElementById('advanceStatus').value;
-            const amount_deducted = parseFloat(document.getElementById('advanceAmountDeducted').value) || 0;
-            const notes = document.getElementById('advanceNotes').value.trim();
-
-            if (amount_deducted > amount) {
-                showToast("Deducted amount cannot exceed the original advance amount.");
-                return;
-            }
-            
-            const advanceData = {
-                employee_id,
-                amount,
-                date_given,
-                reason,
-                status,
-                amount_deducted,
-                notes,
-                updated_at: serverTimestamp()
-            };
-
-            try {
-                if (id) {
-                    // EDIT Existing Advance
-                    const advanceRef = doc(db, getCollectionPath(COLLECTIONS.ADVANCES), id);
-                    await updateDoc(advanceRef, advanceData);
-                    showToast("Advance updated successfully!");
-                } else {
-                    // ADD New Advance
-                    advanceData.created_at = serverTimestamp();
-                    await addDoc(collection(db, getCollectionPath(COLLECTIONS.ADVANCES)), advanceData);
-                    showToast("Advance recorded successfully!");
-                }
-            } catch (e) {
-                console.error("Error saving advance:", e);
-                showToast("Error saving advance. Check console.");
-            }
-            closeAdvanceModal();
-        }
-        
-        /**
-         * Prompts the user to confirm deletion of an advance record.
-         * @param {string} id Firestore Document ID
-         * @param {string} name Employee name
-         */
-        function promptDeleteAdvance(id, name) {
-            openDeleteModal(`Are you sure you want to delete the advance record for ${name}?`, 
-                () => deleteAdvance(id));
-        }
-
-        /**
-         * Deletes an advance record.
-         * @param {string} id Firestore Document ID
-         */
-        async function deleteAdvance(id) {
-            if (!isAuthReady) return;
-            try {
-                await deleteDoc(doc(db, getCollectionPath(COLLECTIONS.ADVANCES), id));
-                showToast("Advance record deleted.");
-            } catch (e) {
-                console.error("Error deleting advance record:", e);
-                showToast("Error deleting advance record. Check console.");
-            }
-        }
-
-        // --- PAYROLL REPORT GENERATION ---
-
-        /**
-         * Generates the comprehensive payroll report for the selected month.
-         */
-        function generateReport() {
-            const month = document.getElementById('payrollMonthSelector').value;
-            if (!month) {
-                showToast("Please select a month for the report.");
-                return;
-            }
-
-            const [year, mon] = month.split('-').map(Number);
-            const daysInMonth = new Date(year, mon, 0).getDate();
-            const payrollDateRange = `${month}-01 to ${month}-${daysInMonth}`;
-            
-            const reportOutput = document.getElementById('payrollReportOutput');
-            let totalPayrollCost = 0;
-            let totalDailyLaborCost = 0;
-
-            const relevantAttendance = attendanceRecords.filter(rec => rec.date.startsWith(month));
-            const relevantAdvances = advances.filter(adv => adv.date_given.startsWith(month));
-            const relevantDailyLabor = dailyLabor.filter(lab => lab.date.startsWith(month));
-            
-            // --- 1. Salaried Employee Report ---
-            let salariedEmployeesReport = `
-                <h3 class="text-xl font-medium text-gray-800">Salaried Employee Payroll (${payrollDateRange})</h3>
-                <div class="bg-white shadow-lg rounded-xl overflow-x-auto">
-                <table class="w-full text-sm text-left text-gray-500 styled-table">
-                    <thead class="text-xs uppercase text-white" style="background-color: var(--color-primary);">
-                        <tr>
-                            <th class="px-6 py-3">Employee</th>
-                            <th class="px-6 py-3">Monthly Salary</th>
-                            <th class="px-6 py-3">Exp. Monthly Hrs</th>
-                            <th class="px-6 py-3">Actual Hrs Worked</th>
-                            <th class="px-6 py-3">Hourly Rate (Est.)</th>
-                            <th class="px-6 py-3">Total Advances Given</th>
-                            <th class="px-6 py-3">Pending Advance Balance</th>
-                            <th class="px-6 py-3">Recommended Advance Deduction</th>
-                            <th class="px-6 py-3 font-bold">NET PAYABLE</th>
-                        </tr>
-                    </thead>
-                    <tbody id="salariedPayrollBody">
-            `;
-
-            const salariedEmployees = employees.filter(e => e.salary_monthly > 0 && e.status === 'Active');
-            salariedEmployees.forEach(emp => {
-                const totalHours = relevantAttendance
-                    .filter(rec => rec.employee_id === emp.id)
-                    .reduce((sum, rec) => sum + rec.net_hours, 0);
-
-                const estimatedHourlyRate = emp.salary_monthly / emp.expected_monthly_hours;
-
-                // Advances Calculation
-                const empAdvances = advances.filter(adv => adv.employee_id === emp.id);
-                const totalGiven = empAdvances.reduce((sum, adv) => sum + adv.amount, 0);
-                const totalDeducted = empAdvances.reduce((sum, adv) => sum + (adv.amount_deducted || 0), 0);
-                const pendingBalance = totalGiven - totalDeducted;
-                
-                // Recommended Deduction: Simple example - deduct 10% of salary, capped at pending balance
-                const recommendedDeduction = Math.min(pendingBalance, emp.salary_monthly * 0.10);
-                
-                // Net Payable
-                const netPayable = emp.salary_monthly - recommendedDeduction;
-                totalPayrollCost += netPayable;
-
-                salariedEmployeesReport += `
-                    <tr class="bg-white border-b hover:bg-gray-50">
-                        <td class="px-6 py-3 font-medium text-gray-900">${emp.name}</td>
-                        <td class="px-6 py-3">${formatCurrency(emp.salary_monthly)}</td>
-                        <td class="px-6 py-3">${emp.expected_monthly_hours} hrs</td>
-                        <td class="px-6 py-3 font-semibold">${totalHours.toFixed(1)} hrs</td>
-                        <td class="px-6 py-3">₹ ${estimatedHourlyRate.toFixed(2)}</td>
-                        <td class="px-6 py-3">${formatCurrency(totalGiven)}</td>
-                        <td class="px-6 py-3">${formatCurrency(pendingBalance)}</td>
-                        <td class="px-6 py-3 text-red-600 font-medium">${formatCurrency(recommendedDeduction)}</td>
-                        <td class="px-6 py-3 font-bold text-lg text-green-700">${formatCurrency(netPayable)}</td>
-                    </tr>
-                `;
-            });
-
-            if (salariedEmployees.length === 0) {
-                 salariedEmployeesReport += `<tr><td colspan="9" class="text-center py-4 text-gray-500">No active salaried employees found.</td></tr>`;
-            }
-            salariedEmployeesReport += `</tbody></table></div>`;
-
-            // --- 2. Daily Labor Cost Report ---
-            let dailyLaborReport = `
-                <h3 class="text-xl font-medium pt-8 text-gray-800">Daily Labor Costs (${payrollDateRange})</h3>
-                <div class="bg-white shadow-lg rounded-xl overflow-x-auto">
-                <table class="w-full text-sm text-left text-gray-500 styled-table">
-                    <thead class="text-xs uppercase text-white" style="background-color: var(--color-primary);">
-                        <tr>
-                            <th class="px-6 py-3">Laborer Name</th>
-                            <th class="px-6 py-3">Date</th>
-                            <th class="px-6 py-3">Daily Wage</th>
-                            <th class="px-6 py-3">Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-            
-            // Group by laborer name for a summary view
-            const dailyLaborSummary = relevantDailyLabor.reduce((acc, lab) => {
-                acc[lab.name] = acc[lab.name] || { totalWage: 0, days: 0 };
-                acc[lab.name].totalWage += lab.wage;
-                acc[lab.name].days += 1;
-                return acc;
-            }, {});
-
-            // Display individual records (for detail)
-            relevantDailyLabor.sort((a, b) => a.date.localeCompare(b.date)).forEach(lab => {
-                totalDailyLaborCost += lab.wage;
-                dailyLaborReport += `
-                    <tr class="bg-white border-b hover:bg-gray-50">
-                        <td class="px-6 py-3 font-medium text-gray-900">${lab.name}</td>
-                        <td class="px-6 py-3">${lab.date}</td>
-                        <td class="px-6 py-3">${formatCurrency(lab.wage)}</td>
-                        <td class="px-6 py-3 max-w-sm truncate">${lab.description}</td>
-                    </tr>
-                `;
-            });
-            
-            if (relevantDailyLabor.length === 0) {
-                dailyLaborReport += `<tr><td colspan="4" class="text-center py-4 text-gray-500">No daily labor records for this month.</td></tr>`;
-            }
-
-            dailyLaborReport += `</tbody></table></div>`;
-
-            // --- 3. Summary Block ---
-            const totalCost = totalPayrollCost + totalDailyLaborCost;
-            let summaryBlock = `
-                <div class="pt-8 space-y-4">
-                    <h3 class="text-2xl font-bold text-gray-800 border-b pb-2">Monthly Cost Summary</h3>
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
-                        <div class="p-6 bg-blue-50 rounded-xl shadow-md">
-                            <p class="text-sm font-medium text-blue-600">Total Salaried Payroll</p>
-                            <p class="text-3xl font-extrabold text-blue-800">${formatCurrency(totalPayrollCost)}</p>
-                        </div>
-                        <div class="p-6 bg-orange-50 rounded-xl shadow-md">
-                            <p class="text-sm font-medium text-orange-600">Total Daily Labor Costs</p>
-                            <p class="text-3xl font-extrabold text-orange-800">${formatCurrency(totalDailyLaborCost)}</p>
-                        </div>
-                        <div class="p-6 bg-green-50 rounded-xl shadow-md">
-                            <p class="text-sm font-medium text-green-600">TOTAL COST OF MONTH</p>
-                            <p class="text-3xl font-extrabold text-green-800">${formatCurrency(totalCost)}</p>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-
-            reportOutput.innerHTML = summaryBlock + salariedEmployeesReport + dailyLaborReport;
-            showToast(`Payroll report generated for ${month}!`);
-        }
-
-
-        // --- DATA EXPORT/IMPORT ---
-
-        /**
-         * Converts array of objects to CSV format.
-         * @param {Array<Object>} data 
-         * @returns {string} CSV content
-         */
-        function arrayToCSV(data) {
-            if (data.length === 0) return '';
-            const header = Object.keys(data[0]);
-            const rows = data.map(obj => header.map(fieldName => {
-                // Handle nested objects by stringifying them
-                let value = obj[fieldName];
-                if (typeof value === 'object' && value !== null) {
-                    value = JSON.stringify(value).replace(/"/g, '""');
-                } else if (value === null || typeof value === 'undefined') {
-                    value = '';
-                } else {
-                    // Ensure strings containing commas are quoted
-                    value = String(value).replace(/"/g, '""');
-                }
-                return `"${value}"`;
-            }).join(','));
-            
-            return [header.join(','), ...rows].join('\n');
-        }
-
-        /**
-         * Triggers a CSV file download.
-         * @param {string} csvContent 
-         * @param {string} filename 
-         */
-        function downloadCSV(csvContent, filename) {
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement("a");
-            if (link.download !== undefined) { 
-                const url = URL.createObjectURL(blob);
-                link.setAttribute("href", url);
-                link.setAttribute("download", filename);
-                link.style.visibility = 'hidden';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                showToast(`Downloading ${filename}...`);
-            } else {
-                showToast("Your browser does not support automatic downloads. CSV content is ready in console.");
-                console.log(csvContent);
-            }
-        }
-        
-        /**
-         * Populates the date/employee filters for attendance export.
-         */
-        function populateExportFilters() {
-            const employeeSelect = document.getElementById('exportAttendanceEmployee');
-            employeeSelect.innerHTML = '<option value="">All Salaried Employees</option>' +
-                employees.filter(e => e.salary_monthly > 0).map(emp => `<option value="${emp.id}">${emp.name}</option>`).join('');
-            
-            // Set date range to current month
-            const today = new Date();
-            const year = today.getFullYear();
-            const month = today.getMonth();
-            
-            const firstDay = new Date(year, month, 1).toISOString().split('T')[0];
-            const lastDay = new Date(year, month + 1, 0).toISOString().split('T')[0];
-            
-            document.getElementById('exportAttendanceFrom').value = firstDay;
-            document.getElementById('exportAttendanceTo').value = lastDay;
-        }
-
-        /**
-         * Exports filtered attendance records to CSV.
-         */
-        function exportAttendanceCSV() {
-            const employeeId = document.getElementById('exportAttendanceEmployee').value;
-            const dateFrom = document.getElementById('exportAttendanceFrom').value;
-            const dateTo = document.getElementById('exportAttendanceTo').value;
-
-            const filtered = attendanceRecords.filter(rec => {
-                const passesEmployee = !employeeId || rec.employee_id === employeeId;
-                const passesDate = rec.date >= dateFrom && rec.date <= dateTo;
-                return passesEmployee && passesDate;
-            }).map(rec => {
-                const employee = employees.find(e => e.id === rec.employee_id);
-                return {
-                    EmployeeName: employee ? employee.name : 'Unknown',
-                    Date: rec.date,
-                    TimeIn: rec.time_in,
-                    TimeOut: rec.time_out,
-                    BreakMins: rec.break_mins,
-                    NetHours: rec.net_hours,
-                    RecordID: rec.id
-                };
-            });
-
-            if (filtered.length === 0) {
-                showToast("No attendance records match the selected filters.");
-                return;
-            }
-
-            const filename = `Attendance_Report_${dateFrom}_to_${dateTo}${employeeId ? `_${employees.find(e => e.id === employeeId)?.name.replace(/\s/g, '')}` : ''}.csv`;
-            downloadCSV(arrayToCSV(filtered), filename);
-        }
-
-        /**
-         * Exports all daily labor records to CSV.
-         */
-        function exportDailyLaborCSV() {
-            const formatted = dailyLabor.map(rec => ({
-                Date: rec.date,
-                LaborerName: rec.name,
-                DailyWage: rec.wage,
-                Description: rec.description,
-                RecordID: rec.id
-            }));
-
-            if (formatted.length === 0) {
-                showToast("No daily labor records to export.");
-                return;
-            }
-
-            downloadCSV(arrayToCSV(formatted), `Daily_Labor_Full_Backup_${new Date().toISOString().split('T')[0]}.csv`);
-        }
-
-        /**
-         * Exports all data (employees, attendance, advances, dailyLabor) to a single JSON backup file.
-         */
-        function exportFullBackup() {
-            const backupData = {
-                employees: employees.map(e => {
-                    // Clean up Firestore doc ID
-                    const { id, ...data } = e;
-                    return data;
-                }),
-                attendanceRecords: attendanceRecords.map(a => {
-                    const { id, ...data } = a;
-                    return data;
-                }),
-                advances: advances.map(a => {
-                    const { id, ...data } = a;
-                    return data;
-                }),
-                dailyLabor: dailyLabor.map(d => {
-                    const { id, ...data } = d;
-                    return data;
-                }),
-                metadata: {
-                    generatedBy: 'Furniture Payroll Tracker',
-                    timestamp: new Date().toISOString()
-                }
-            };
-            
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
-            const downloadAnchorNode = document.createElement('a');
-            downloadAnchorNode.setAttribute("href", dataStr);
-            downloadAnchorNode.setAttribute("download", `Payroll_Full_Backup_${new Date().toISOString().split('T')[0]}.json`);
-            document.body.appendChild(downloadAnchorNode);
-            downloadAnchorNode.click();
-            downloadAnchorNode.remove();
-            showToast("Full data backup downloaded.");
-        }
-
-        /**
-         * Imports data from a JSON backup file and writes it to Firestore.
-         */
-        async function importBackup() {
-            if (!isAuthReady) {
-                showToast("Data service not ready. Please wait a moment.");
-                return;
-            }
-            
-            const fileInput = document.getElementById('backupFile');
-            if (fileInput.files.length === 0) {
-                showToast("Please select a backup file to restore.");
-                return;
-            }
-
-            const file = fileInput.files[0];
-            const reader = new FileReader();
-
-            reader.onload = async (e) => {
-                try {
-                    const data = JSON.parse(e.target.result);
-                    if (!data.employees || !data.attendanceRecords || !data.advances || !data.dailyLabor) {
-                        throw new Error("Backup file format is invalid. Missing required data arrays.");
-                    }
-                    
-                    const batch = writeBatch(db);
-                    
-                    // Note: This process adds new documents. It does NOT clear existing data.
-                    // For a true "restore," you would need to delete existing collections first.
-                    // We will just add the new documents for simplicity, making this an APPEND operation.
-
-                    const collectionsToImport = [
-                        { name: COLLECTIONS.EMPLOYEES, data: data.employees },
-                        { name: COLLECTIONS.ATTENDANCE, data: data.attendanceRecords },
-                        { name: COLLECTIONS.ADVANCES, data: data.advances },
-                        { name: COLLECTIONS.DAILY_LABOR, data: data.dailyLabor }
-                    ];
-
-                    collectionsToImport.forEach(col => {
-                        col.data.forEach(item => {
-                            // Important: Remove 'id' field if it exists, as Firestore will assign a new one.
-                            delete item.id; 
-                            const newDocRef = doc(collection(db, getCollectionPath(col.name)));
-                            batch.set(newDocRef, { 
-                                ...item, 
-                                created_at: item.created_at || serverTimestamp() 
-                            });
-                        });
-                    });
-
-                    await batch.commit();
-                    showToast("Backup data appended successfully to Firestore! Refreshing data...");
-                    fileInput.value = ''; // Clear file input
-                    // Data will refresh automatically due to onSnapshot listeners
-                    
-                } catch (error) {
-                    console.error("Error importing backup:", error);
-                    showToast(`Error importing backup: ${error.message}`);
-                }
-            };
-
-            reader.readAsText(file);
-        }
-
-        // --- MODAL & UI MANAGEMENT FUNCTIONS ---
-
-        const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-
-        /**
-         * Renders the schedule inputs inside the employee modal.
-         * @param {Object} schedule Existing schedule data
-         */
-        function renderScheduleInputs(schedule = {}) {
-            const container = document.getElementById('scheduleInputs');
-            container.innerHTML = DAYS.map(day => {
-                const dayData = schedule[day];
-                const isOff = dayData === 'off' || !dayData;
-                const start = isOff ? '08:00' : (dayData.start || '08:00');
-                const end = isOff ? '17:00' : (dayData.end || '17:00');
-                const breakMins = isOff ? 30 : (dayData.break_mins || 30);
-                const netHours = isOff ? 0 : (dayData.net_hours || 8.5);
-
-                return `
-                    <div class="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-3 p-2 bg-gray-50 rounded-md">
-                        <label class="font-medium text-gray-700 w-24 capitalize">${day}</label>
-                        <select id="${day}Type" onchange="toggleScheduleInputs('${day}')" class="p-1 border border-gray-300 rounded-md text-sm w-full sm:w-28">
-                            <option value="work" ${!isOff ? 'selected' : ''}>Working Day</option>
-                            <option value="off" ${isOff ? 'selected' : ''}>Day Off</option>
-                        </select>
-                        <div id="${day}Details" class="flex-grow flex space-x-2 ${isOff ? 'hidden' : ''}">
-                            <input type="time" id="${day}Start" value="${start}" onchange="updateNetHours('${day}')" class="p-1 border border-gray-300 rounded-md text-sm w-24">
-                            <span class="text-sm text-gray-500 flex items-center">-</span>
-                            <input type="time" id="${day}End" value="${end}" onchange="updateNetHours('${day}')" class="p-1 border border-gray-300 rounded-md text-sm w-24">
-                            <input type="number" id="${day}Break" value="${breakMins}" min="0" placeholder="Break(m)" onchange="updateNetHours('${day}')" class="p-1 border border-gray-300 rounded-md text-sm w-20">
-                            <span id="${day}NetHours" class="text-sm font-semibold text-green-700 flex items-center">${netHours.toFixed(1)} hrs</span>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-            
-            // Re-attach listeners for net hours calculation if editing
-            DAYS.forEach(day => updateNetHours(day));
-        }
-
-        /**
-         * Toggles the visibility of time inputs based on 'work' or 'off' selection.
-         * @param {string} day 
-         */
-        window.toggleScheduleInputs = function(day) {
-            const type = document.getElementById(`${day}Type`).value;
-            const detailsDiv = document.getElementById(`${day}Details`);
-            const netHoursSpan = document.getElementById(`${day}NetHours`);
-            
-            if (detailsDiv) {
-                detailsDiv.classList.toggle('hidden', type === 'off');
-            }
-
-            if (netHoursSpan) {
-                netHoursSpan.textContent = type === 'off' ? '0.0 hrs' : updateNetHours(day);
-            }
-        }
-        
-        /**
-         * Updates the displayed net hours for a single day.
-         * @param {string} day 
-         * @returns {string} The formatted net hours string.
-         */
-        window.updateNetHours = function(day) {
-            const start = document.getElementById(`${day}Start`)?.value;
-            const end = document.getElementById(`${day}End`)?.value;
-            const breakMins = parseFloat(document.getElementById(`${day}Break`)?.value) || 0;
-            const type = document.getElementById(`${day}Type`).value;
-            
-            let net_hours = 0;
-            if (type === 'work') {
-                net_hours = calculateTimeDifference(start, end, breakMins);
-            }
-            
-            const netHoursSpan = document.getElementById(`${day}NetHours`);
-            if (netHoursSpan) {
-                netHoursSpan.textContent = `${net_hours.toFixed(1)} hrs`;
-            }
-            
-            return `${net_hours.toFixed(1)} hrs`;
-        }
-
-        /**
-         * Opens the Add Employee Modal.
-         */
-        window.openAddEmployeeModal = function() {
-            document.getElementById('employeeModalTitle').textContent = 'Add New Employee';
-            document.getElementById('employeeId').value = '';
-            document.getElementById('employeeForm').reset();
-            document.getElementById('employeeHireDate').value = new Date().toISOString().split('T')[0];
-            renderScheduleInputs(); // Default schedule
-            document.getElementById('employeeModal').style.display = 'block';
-        }
-
-        /**
-         * Opens the Edit Employee Modal.
-         * @param {string} id Firestore Document ID
-         */
-        window.openEditEmployeeModal = function(id) {
-            const employee = employees.find(e => e.id === id);
-            if (!employee) {
-                showToast("Employee not found!");
-                return;
-            }
-
-            document.getElementById('employeeModalTitle').textContent = `Edit Employee: ${employee.name}`;
-            document.getElementById('employeeId').value = employee.id;
-            document.getElementById('employeeName').value = employee.name;
-            document.getElementById('employeeRole').value = employee.role;
-            document.getElementById('employeeSalary').value = employee.salary_monthly;
-            document.getElementById('employeeHireDate').value = employee.hire_date;
-            document.getElementById('employeeStatus').value = employee.status;
-
-            renderScheduleInputs(employee.schedule);
-            
-            document.getElementById('employeeModal').style.display = 'block';
-        }
-
-        /**
-         * Closes the Employee Modal.
-         */
-        window.closeEmployeeModal = function() {
-            document.getElementById('employeeModal').style.display = 'none';
-        }
-        
-        /**
-         * Populates employee select dropdowns in modals (Advances, Export).
-         */
-        function populateModalSelects() {
-            // Advance Modal Employee Select
-            const advanceSelect = document.getElementById('advanceEmployeeId');
-            if (advanceSelect) {
-                 advanceSelect.innerHTML = employees
-                    .filter(e => e.status === 'Active' && e.salary_monthly > 0)
-                    .map(emp => `<option value="${emp.id}">${emp.name} (${emp.role})</option>`).join('');
-            }
-            
-            // Attendance Tab Select
-            populateAttendanceSelect();
-            
-            // Settings Tab Export Select
-            populateExportFilters();
-        }
-
-        /**
-         * Opens the Add Advance Modal.
-         */
-        window.openAddAdvanceModal = function() {
-            document.getElementById('advanceModalTitle').textContent = 'Record New Advance';
-            document.getElementById('advanceId').value = '';
-            document.getElementById('advanceForm').reset();
-            document.getElementById('advanceDate').value = new Date().toISOString().split('T')[0];
-            document.getElementById('advanceDeductionFields').style.display = 'none';
-            document.getElementById('advanceModal').style.display = 'block';
-        }
-
-        /**
-         * Opens the Edit Advance Modal.
-         * @param {string} id Firestore Document ID
-         */
-        window.openEditAdvanceModal = function(id) {
-            const advance = advances.find(a => a.id === id);
-            if (!advance) {
-                showToast("Advance record not found!");
-                return;
-            }
-
-            document.getElementById('advanceModalTitle').textContent = 'Edit Advance';
-            document.getElementById('advanceId').value = advance.id;
-            document.getElementById('advanceEmployeeId').value = advance.employee_id;
-            document.getElementById('advanceAmount').value = advance.amount;
-            document.getElementById('advanceDate').value = advance.date_given;
-            document.getElementById('advanceReason').value = advance.reason;
-            
-            // Show deduction fields for editing
-            document.getElementById('advanceStatus').value = advance.status || 'Pending';
-            document.getElementById('advanceAmountDeducted').value = advance.amount_deducted || 0;
-            document.getElementById('advanceNotes').value = advance.notes || '';
-            document.getElementById('advanceDeductionFields').style.display = 'block';
-            
-            document.getElementById('advanceModal').style.display = 'block';
-        }
-
-        /**
-         * Closes the Advance Modal.
-         */
-        window.closeAdvanceModal = function() {
-            document.getElementById('advanceModal').style.display = 'none';
-        }
-
-        /**
-         * Tab switching logic.
-         * @param {string} tabId The data-tab attribute value.
-         */
-        window.showTab = function(tabId) {
-            // Hide all tab contents
-            document.querySelectorAll('.tab-content').forEach(div => div.style.display = 'none');
-            // Remove active class from all buttons
-            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-
-            // Show selected tab content and set active class on button
-            document.getElementById(`tab-${tabId}`).style.display = 'block';
-            document.querySelector(`.tab-button[data-tab="${tabId}"]`).classList.add('active');
-
-            // Trigger specific renders for the active tab
-            if (tabId === 'attendance' || tabId === 'daily-labor') {
-                const today = new Date().toISOString().substring(0, 7);
-                // Only change if a different month is selected, otherwise stick to default
-                if (selectedMonth !== today) {
-                    selectedMonth = today;
-                }
-                renderAttendanceRecords();
-                renderDailyLaborRecords();
-            } else if (tabId === 'payroll') {
-                document.getElementById('payrollReportOutput').innerHTML = '<p class="text-center text-gray-500 py-12">Select a month and click "Generate Report" to view payroll data.</p>';
-            }
-        }
-        
-        // --- EVENT LISTENERS ---
-        
-        // Initial setup
-        window.addEventListener('load', () => {
-            initFirebase();
-            document.getElementById('employeeForm').addEventListener('submit', handleEmployeeFormSubmit);
-            document.getElementById('advanceForm').addEventListener('submit', handleAdvanceFormSubmit);
-            document.getElementById('restoreBackupBtn').addEventListener('click', importBackup);
-            
-            // Initial tab display
-            const initialTab = 'employees';
-            showTab(initialTab);
-            
-            // Tab button handlers
-            document.querySelectorAll('.tab-button').forEach(button => {
-                button.addEventListener('click', (e) => showTab(e.target.getAttribute('data-tab')));
-            });
-            
-            // Payroll month change listener
-            document.getElementById('payrollMonthSelector').addEventListener('change', (e) => {
-                selectedMonth = e.target.value;
-                // This will trigger the attendance/labor list updates when they are viewed
-                renderAttendanceRecords();
-                renderDailyLaborRecords();
-            });
-
-            // Expose global functions needed by HTML (modals, etc.)
-            window.handleAttendanceRecord = handleAttendanceRecord;
-            window.addDailyLaborRecord = addDailyLaborRecord;
-            window.generateReport = generateReport;
-            window.exportAttendanceCSV = exportAttendanceCSV;
-            window.exportDailyLaborCSV = exportDailyLaborCSV;
-            window.exportFullBackup = exportFullBackup;
-            window.openDeleteModal = openDeleteModal;
-            window.closeDeleteModal = closeDeleteModal;
-            window.promptDeleteEmployee = promptDeleteEmployee;
-            window.promptDeleteAdvance = promptDeleteAdvance;
-            window.promptDeleteAttendance = promptDeleteAttendance;
-            window.promptDeleteDailyLabor = promptDeleteDailyLabor;
-            window.deleteAdvance = deleteAdvance;
-            window.deleteAttendance = deleteAttendance;
-            window.deleteDailyLabor = deleteDailyLabor;
-            
-        });
-        
-    </script>
+    <script src="app.js"></script>
 </body>
 </html>
