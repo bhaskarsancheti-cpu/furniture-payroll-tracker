@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Furniture Payroll Tracker - Full Version</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; color: #333; }
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center; z-index: 2000; }
+        .modal.hidden { display: none; }
+        .modal-content { background: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .modal-content h2 { margin-bottom: 20px; color: #2c3e50; }
+        .form-group { margin: 15px 0; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 13px; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 13px; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: #3498db; box-shadow: 0 0 5px rgba(52, 152, 219, 0.3); }
+        .btn { padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; font-size: 13px; font-weight: bold; }
+        .btn-primary { background: #3498db; color: white; width: 100%; }
+        .btn-primary:hover { background: #2980b9; }
+        .btn-primary:disabled { background: #95a5a6; cursor: not-allowed; }
+        .btn-secondary { background: #95a5a6; color: white; }
+        .btn-secondary:hover { background: #7f8c8d; }
+        .btn-small { padding: 5px 10px; font-size: 12px; margin: 2px; width: auto; }
+        .btn-add { background: #27ae60; color: white; width: auto; margin: 15px 0; }
+        .btn-add:hover { background: #229954; }
+        .btn-delete { background: #e74c3c; color: white; }
+        .btn-delete:hover { background: #c0392b; }
+        .btn-edit { background: #f39c12; color: white; }
+        .btn-edit:hover { background: #e67e22; }
+        .btn-close { background: #95a5a6; color: white; margin-top: 15px; }
+        .app-header { background: #2c3e50; color: white; padding: 20px; text-align: center; }
+        .app-header h1 { margin-bottom: 15px; }
+        .nav-tabs { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; justify-content: center; }
+        .tab-btn { padding: 10px 15px; background: #34495e; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 13px; }
+        .tab-btn.active { background: #3498db; }
+        .tab-btn:hover { background: #3498db; }
+        main { padding: 20px; max-width: 1400px; margin: 0 auto; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin: 15px 0; }
+        .card h3 { color: #2c3e50; margin-bottom: 15px; }
+        .card table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
+        .card table th { background: #34495e; color: white; padding: 10px; text-align: left; }
+        .card table td { padding: 10px; border-bottom: 1px solid #ddd; }
+        .card table tr:hover { background: #f9f9f9; }
+        .success { color: #2ecc71; font-weight: bold; }
+        .error { color: #e74c3c; font-weight: bold; }
+        .message { padding: 10px; margin: 10px 0; border-radius: 5px; font-size: 13px; }
+        .message.success { background: #d5f4e6; color: #27ae60; }
+        .message.error { background: #fadbd8; color: #c0392b; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Firebase Setup Modal -->
+        <div id="firebase-setup-modal" class="modal">
+            <div class="modal-content">
+                <h2>🔐 Firebase Setup</h2>
+                <p style="margin-bottom: 20px; font-size: 13px;">Enter your Firebase Realtime Database credentials:</p>
+                <div class="form-group">
+                    <label>API Key:</label>
+                    <input type="text" id="apiKey" placeholder="AIzaSy...">
+                </div>
+                <div class="form-group">
+                    <label>Auth Domain:</label>
+                    <input type="text" id="authDomain" placeholder="project.firebaseapp.com">
+                </div>
+                <div class="form-group">
+                    <label>Database URL:</label>
+                    <input type="text" id="databaseURL" placeholder="https://project.firebaseio.com">
+                </div>
+                <div class="form-group">
+                    <label>Project ID:</label>
+                    <input type="text" id="projectId" placeholder="project-id">
+                </div>
+                <button onclick="setupFirebase()" class="btn btn-primary" id="setupBtn">Connect to Firebase</button>
+                <p id="setupError" class="message error" style="display: none;"></p>
+            </div>
+        </div>
+
+        <!-- Main App -->
+        <div id="main-app" style="display:none;">
+            <header class="app-header">
+                <h1>🛠️ Furniture Payroll Tracker - Full Version</h1>
+                <div class="nav-tabs">
+                    <button class="tab-btn active" onclick="switchTab('dashboard')">Dashboard</button>
+                    <button class="tab-btn" onclick="switchTab('team')">Team</button>
+                    <button class="tab-btn" onclick="switchTab('attendance')">Attendance</button>
+                    <button class="tab-btn" onclick="switchTab('advances')">Advances</button>
+                    <button class="tab-btn" onclick="switchTab('dailyLabor')">Daily Labor</button>
+                    <button class="tab-btn" onclick="switchTab('payroll')">Payroll</button>
+                    <button class="tab-btn" onclick="switchTab('export')">Export</button>
+                </div>
+            </header>
+            <main id="tab-content"></main>
+        </div>
+
+        <!-- Modals for Adding/Editing -->
+        <div id="add-employee-modal" class="modal hidden">
+            <div class="modal-content">
+                <h2>Add New Employee</h2>
+                <div class="form-group">
+                    <label>Name:</label>
+                    <input type="text" id="emp-name" placeholder="Employee name">
+                </div>
+                <div class="form-group">
+                    <label>Role:</label>
+                    <input type="text" id="emp-role" placeholder="Carpenter, Polisher, etc.">
+                </div>
+                <div class="form-group">
+                    <label>Salary (₹):</label>
+                    <input type="number" id="emp-salary" placeholder="Monthly salary">
+                </div>
+                <div class="form-group">
+                    <label>Hire Date:</label>
+                    <input type="date" id="emp-hire-date">
+                </div>
+                <div class="form-group">
+                    <label>Phone:</label>
+                    <input type="text" id="emp-phone" placeholder="Phone number">
+                </div>
+                <button onclick="saveEmployee()" class="btn btn-primary">Save Employee</button>
+                <button onclick="closeModal('add-employee-modal')" class="btn btn-close">Cancel</button>
+            </div>
+        </div>
+
+        <div id="add-attendance-modal" class="modal hidden">
+            <div class="modal-content">
+                <h2>Add Attendance</h2>
+                <div class="form-group">
+                    <label>Date:</label>
+                    <input type="date" id="att-date">
+                </div>
+                <div class="form-group">
+                    <label>Employee:</label>
+                    <select id="att-employee"></select>
+                </div>
+                <div class="form-group">
+                    <label>Start Time (HH:MM):</label>
+                    <input type="text" id="att-start" placeholder="08:30">
+                </div>
+                <div class="form-group">
+                    <label>End Time (HH:MM):</label>
+                    <input type="text" id="att-end" placeholder="19:00">
+                </div>
+                <div class="form-group">
+                    <label>Break (mins):</label>
+                    <input type="number" id="att-break" value="30">
+                </div>
+                <div class="form-group">
+                    <label>Status:</label>
+                    <select id="att-status">
+                        <option value="Present">Present</option>
+                        <option value="Absent">Absent</option>
+                        <option value="Leave">Leave</option>
+                        <option value="Half-day">Half-day</option>
+                        <option value="Overtime">Overtime</option>
+                    </select>
+                </div>
+                <button onclick="saveAttendance()" class="btn btn-primary">Save Attendance</button>
+                <button onclick="closeModal('add-attendance-modal')" class="btn btn-close">Cancel</button>
+            </div>
+        </div>
+
+        <div id="add-advance-modal" class="modal hidden">
+            <div class="modal-content">
+                <h2>Add Salary Advance</h2>
+                <div class="form-group">
+                    <label>Employee:</label>
+                    <select id="adv-employee"></select>
+                </div>
+                <div class="form-group">
+                    <label>Amount (₹):</label>
+                    <input type="number" id="adv-amount" placeholder="Amount">
+                </div>
+                <div class="form-group">
+                    <label>Date Given:</label>
+                    <input type="date" id="adv-date">
+                </div>
+                <div class="form-group">
+                    <label>Reason:</label>
+                    <select id="adv-reason">
+                        <option value="Personal">Personal</option>
+                        <option value="Emergency">Emergency</option>
+                        <option value="Purchase">Purchase</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Status:</label>
+                    <select id="adv-status">
+                        <option value="Pending">Pending</option>
+                        <option value="Partial">Partial</option>
+                        <option value="Settled">Settled</option>
+                    </select>
+                </div>
+                <button onclick="saveAdvance()" class="btn btn-primary">Save Advance</button>
+                <button onclick="closeModal('add-advance-modal')" class="btn btn-close">Cancel</button>
+            </div>
+        </div>
+
+        <div id="add-labor-modal" class="modal hidden">
+            <div class="modal-content">
+                <h2>Add Daily Labor Entry</h2>
+                <div class="form-group">
+                    <label>Date:</label>
+                    <input type="date" id="labor-date">
+                </div>
+                <div class="form-group">
+                    <label>Laborer Name:</label>
+                    <input type="text" id="labor-name" placeholder="Name">
+                </div>
+                <div class="form-group">
+                    <label>Daily Wage (₹):</label>
+                    <input type="number" id="labor-wage" placeholder="Daily wage">
+                </div>
+                <div class="form-group">
+                    <label>Hours Worked:</label>
+                    <input type="number" id="labor-hours" placeholder="Hours" value="8">
+                </div>
+                <button onclick="saveDailyLabor()" class="btn btn-primary">Save Entry</button>
+                <button onclick="closeModal('add-labor-modal')" class="btn btn-close">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js"></script>
+
+    <script>
+        let db = null;
+        let firebaseConfig = null;
+        let allData = { employees: {}, attendance: {}, advances: {}, dailyLabor: {} };
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const saved = localStorage.getItem('fbConfig');
+            if (saved) {
+                firebaseConfig = JSON.parse(saved);
+                connectFirebase();
+            }
+        });
+
+        function setupFirebase() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const authDomain = document.getElementById('authDomain').value.trim();
+            const databaseURL = document.getElementById('databaseURL').value.trim();
+            const projectId = document.getElementById('projectId').value.trim();
+
+            if (!apiKey || !authDomain || !databaseURL || !projectId) {
+                showMessage('setupError', 'Fill all fields', 'error');
+                return;
+            }
+
+            firebaseConfig = { apiKey, authDomain, databaseURL, projectId };
+            document.getElementById('setupBtn').disabled = true;
+            connectFirebase();
+        }
+
+        function connectFirebase() {
+            try {
+                if (!firebase.apps.length) {
+                    firebase.initializeApp(firebaseConfig);
+                }
+                db = firebase.database();
+
+                db.ref('.info/connected').on('value', function(snapshot) {
+                    if (snapshot.val() === true) {
+                        localStorage.setItem('fbConfig', JSON.stringify(firebaseConfig));
+                        document.getElementById('firebase-setup-modal').classList.add('hidden');
+                        document.getElementById('main-app').style.display = 'block';
+                        loadDataFromFirebase();
+                        switchTab('dashboard');
+                        document.getElementById('setupBtn').disabled = false;
+                    }
+                });
+            } catch(error) {
+                showMessage('setupError', 'Error: ' + error.message, 'error');
+                document.getElementById('setupBtn').disabled = false;
+            }
+        }
+
+        function loadDataFromFirebase() {
+            db.ref('employees').on('value', snapshot => {
+                allData.employees = snapshot.val() || {};
+                populateEmployeeSelects();
+            });
+            db.ref('attendanceLog').on('value', snapshot => {
+                allData.attendance = snapshot.val() || {};
+            });
+            db.ref('advances').on('value', snapshot => {
+                allData.advances = snapshot.val() || {};
+            });
+            db.ref('dailyLaborers').on('value', snapshot => {
+                allData.dailyLabor = snapshot.val() || {};
+            });
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+
+            if (tab === 'dashboard') renderDashboard();
+            else if (tab === 'team') renderTeam();
+            else if (tab === 'attendance') renderAttendance();
+            else if (tab === 'advances') renderAdvances();
+            else if (tab === 'dailyLabor') renderDailyLabor();
+            else if (tab === 'payroll') renderPayroll();
+            else if (tab === 'export') renderExport();
+        }
+
+        function renderDashboard() {
+            const html = `
+                <div class="card">
+                    <h3>📊 Dashboard</h3>
+                    <p><span class="success">✓ Firebase Connected!</span></p>
+                    <p>✓ Employees: ${Object.keys(allData.employees).length}</p>
+                    <p>✓ Attendance Records: ${Object.keys(allData.attendance).length}</p>
+                    <p>✓ Pending Advances: ₹${calculateAdvances()}</p>
+                    <p>✓ Daily Labor Entries: ${Object.keys(allData.dailyLabor).length}</p>
+                </div>
+            `;
+            document.getElementById('tab-content').innerHTML = html;
+        }
+
+        function renderTeam() {
+            let html = `<div class="card">
+                <h3>👥 Team Management</h3>
+                <button onclick="openModal('add-employee-modal')" class="btn btn-add">+ Add Employee</button>
+                <table><tr><th>Name</th><th>Role</th><th>Salary</th><th>Status</th><th>Actions</th></tr>`;
+            
+            for (const id in allData.employees) {
+                const emp = allData.employees[id];
+                html += `<tr>
+                    <td>${emp.name}</td>
+                    <td>${emp.role}</td>
+                    <td>₹${emp.current_salary}</td>
+                    <td>${emp.status}</td>
+                    <td>
+                        <button class="btn btn-small btn-delete" onclick="deleteEmployee('${id}')">Delete</button>
+                    </td>
+                </tr>`;
+            }
+            html += '</table></div>';
+            document.getElementById('tab-content').innerHTML = html;
+        }
+
+        function renderAttendance() {
+            let html = `<div class="card">
+                <h3>📋 Attendance Log</h3>
+                <button onclick="openModal('add-attendance-modal')" class="btn btn-add">+ Add Attendance</button>
+                <table><tr><th>Date</th><th>Employee</th><th>Start</th><th>End</th><th>Hours</th><th>Status</th><th>Actions</th></tr>`;
+            
+            for (const id in allData.attendance) {
+                const att = allData.attendance[id];
+                html += `<tr>
+                    <td>${att.date}</td>
+                    <td>${att.employee_name}</td>
+                    <td>${att.start_time}</td>
+                    <td>${att.end_time}</td>
+                    <td>${att.net_hours}</td>
+                    <td>${att.status}</td>
+                    <td>
+                        <button class="btn btn-small btn-delete" onclick="deleteAttendance('${id}')">Delete</button>
+                    </td>
+                </tr>`;
+            }
+            html += '</table></div>';
+            document.getElementById('tab-content').innerHTML = html;
+        }
+
+        function renderAdvances() {
+            let html = `<div class="card">
+                <h3>💰 Advances Tracking</h3>
+                <button onclick="openModal('add-advance-modal')" class="btn btn-add">+ Add Advance</button>
+                <p>Total Pending: ₹${calculateAdvances()}</p>
+                <table><tr><th>Employee</th><th>Amount</th><th>Date</th><th>Reason</th><th>Status</th><th>Actions</th></tr>`;
+            
+            for (const id in allData.advances) {
+                const adv = allData.advances[id];
+                html += `<tr>
+                    <td>${adv.employee_name}</td>
+                    <td>₹${adv.amount}</td>
+                    <td>${adv.date_given}</td>
+                    <td>${adv.reason}</td>
+                    <td>${adv.status}</td>
+                    <td>
+                        <button class="btn btn-small btn-delete" onclick="deleteAdvance('${id}')">Delete</button>
+                    </td>
+                </tr>`;
+            }
+            html += '</table></div>';
+            document.getElementById('tab-content').innerHTML = html;
+        }
+
+        function renderDailyLabor() {
+            let html = `<div class="card">
+                <h3>👷 Daily Labor</h3>
+                <button onclick="openModal('add-labor-modal')" class="btn btn-add">+ Add Entry</button>
+                <table><tr><th>Date</th><th>Name</th><th>Wage</th><th>Hours</th><th>Total</th><th>Actions</th></tr>`;
+            
+            for (const id in allData.dailyLabor) {
+                const labor = allData.dailyLabor[id];
+                const total = labor.daily_wage * labor.hours_worked;
+                html += `<tr>
+                    <td>${labor.date}</td>
+                    <td>${labor.name}</td>
+                    <td>₹${labor.daily_wage}</td>
+                    <td>${labor.hours_worked}h</td>
+                    <td>₹${total}</td>
+                    <td>
+                        <button class="btn btn-small btn-delete" onclick="deleteDailyLabor('${id}')">Delete</button>
+                    </td>
+                </tr>`;
+            }
+            html += '</table></div>';
+            document.getElementById('tab-content').innerHTML = html;
+        }
+
+        function renderPayroll() {
+            document.getElementById('tab-content').innerHTML = `<div class="card">
+                <h3>💵 Payroll Summary</h3>
+                <p>Total Employees: ${Object.keys(allData.employees).length}</p>
+                <p>Payroll is calculated based on attendance, advances, and daily labor.</p>
+            </div>`;
+        }
+
+        function renderExport() {
+            document.getElementById('tab-content').innerHTML = `
+                <div class="card">
+                    <h3>💾 Export & Backup</h3>
+                    <button class="btn btn-primary" onclick="exportJSON()" style="width: 200px; margin: 10px 0;">📥 Download JSON</button>
+                    <button class="btn btn-primary" onclick="exportCSV()" style="width: 200px; margin: 10px 0;">📥 Download CSV</button>
+                </div>
+            `;
+        }
+
+        function saveEmployee() {
+            const name = document.getElementById('emp-name').value.trim();
+            const role = document.getElementById('emp-role').value.trim();
+            const salary = parseInt(document.getElementById('emp-salary').value) || 0;
+            const hireDate = document.getElementById('emp-hire-date').value;
+            const phone = document.getElementById('emp-phone').value.trim();
+
+            if (!name || !role || !salary) {
+                alert('Please fill required fields');
+                return;
+            }
+
+            const id = 'emp_' + Date.now();
+            const emp = { name, role, current_salary: salary, hire_date: hireDate, phone, status: 'Active' };
+            
+            db.ref('employees/' + id).set(emp, function(error) {
+                if (error) alert('Error saving employee');
+                else {
+                    alert('Employee saved!');
+                    closeModal('add-employee-modal');
+                    document.getElementById('emp-name').value = '';
+                    document.getElementById('emp-role').value = '';
+                    document.getElementById('emp-salary').value = '';
+                }
+            });
+        }
+
+        function saveAttendance() {
+            const date = document.getElementById('att-date').value;
+            const empId = document.getElementById('att-employee').value;
+            const startTime = document.getElementById('att-start').value;
+            const endTime = document.getElementById('att-end').value;
+            const breakMins = parseInt(document.getElementById('att-break').value) || 30;
+            const status = document.getElementById('att-status').value;
+
+            if (!date || !empId || !startTime || !endTime) {
+                alert('Please fill required fields');
+                return;
+            }
+
+            const emp = allData.employees[empId];
+            const id = 'att_' + Date.now();
+            const netHours = 8; // Simplified
+            
+            const att = { 
+                date, 
+                employee_name: emp.name, 
+                start_time: startTime, 
+                end_time: endTime, 
+                net_hours: netHours, 
+                status 
+            };
+            
+            db.ref('attendanceLog/' + id).set(att, function(error) {
+                if (error) alert('Error saving attendance');
+                else {
+                    alert('Attendance saved!');
+                    closeModal('add-attendance-modal');
+                }
+            });
+        }
+
+        function saveAdvance() {
+            const empId = document.getElementById('adv-employee').value;
+            const amount = parseInt(document.getElementById('adv-amount').value) || 0;
+            const date = document.getElementById('adv-date').value;
+            const reason = document.getElementById('adv-reason').value;
+            const status = document.getElementById('adv-status').value;
+
+            if (!empId || !amount || !date) {
+                alert('Please fill required fields');
+                return;
+            }
+
+            const emp = allData.employees[empId];
+            const id = 'adv_' + Date.now();
+            
+            const adv = { 
+                employee_name: emp.name, 
+                amount, 
+                date_given: date, 
+                reason, 
+                status 
+            };
+            
+            db.ref('advances/' + id).set(adv, function(error) {
+                if (error) alert('Error saving advance');
+                else {
+                    alert('Advance saved!');
+                    closeModal('add-advance-modal');
+                }
+            });
+        }
+
+        function saveDailyLabor() {
+            const date = document.getElementById('labor-date').value;
+            const name = document.getElementById('labor-name').value.trim();
+            const wage = parseInt(document.getElementById('labor-wage').value) || 0;
+            const hours = parseInt(document.getElementById('labor-hours').value) || 8;
+
+            if (!date || !name || !wage) {
+                alert('Please fill required fields');
+                return;
+            }
+
+            const id = 'labor_' + Date.now();
+            const labor = { date, name, daily_wage: wage, hours_worked: hours };
+            
+            db.ref('dailyLaborers/' + id).set(labor, function(error) {
+                if (error) alert('Error saving entry');
+                else {
+                    alert('Entry saved!');
+                    closeModal('add-labor-modal');
+                }
+            });
+        }
+
+        function deleteEmployee(id) {
+            if (confirm('Delete this employee?')) {
+                db.ref('employees/' + id).remove();
+            }
+        }
+
+        function deleteAttendance(id) {
+            if (confirm('Delete this entry?')) {
+                db.ref('attendanceLog/' + id).remove();
+            }
+        }
+
+        function deleteAdvance(id) {
+            if (confirm('Delete this advance?')) {
+                db.ref('advances/' + id).remove();
+            }
+        }
+
+        function deleteDailyLabor(id) {
+            if (confirm('Delete this entry?')) {
+                db.ref('dailyLaborers/' + id).remove();
+            }
+        }
+
+        function populateEmployeeSelects() {
+            const select1 = document.getElementById('att-employee');
+            const select2 = document.getElementById('adv-employee');
+            select1.innerHTML = '<option value="">Select Employee</option>';
+            select2.innerHTML = '<option value="">Select Employee</option>';
+            
+            for (const id in allData.employees) {
+                const emp = allData.employees[id];
+                const opt1 = document.createElement('option');
+                opt1.value = id;
+                opt1.text = emp.name;
+                select1.appendChild(opt1);
+                
+                const opt2 = document.createElement('option');
+                opt2.value = id;
+                opt2.text = emp.name;
+                select2.appendChild(opt2);
+            }
+        }
+
+        function calculateAdvances() {
+            let total = 0;
+            for (const id in allData.advances) {
+                if (allData.advances[id].status === 'Pending' || allData.advances[id].status === 'Partial') {
+                    total += allData.advances[id].amount || 0;
+                }
+            }
+            return total;
+        }
+
+        function openModal(id) {
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        function exportJSON() {
+            const data = JSON.stringify(allData, null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'payroll-backup-' + new Date().getTime() + '.json';
+            a.click();
+        }
+
+        function exportCSV() {
+            let csv = 'Date,Employee,Start,End,Hours,Status\n';
+            for (const id in allData.attendance) {
+                const att = allData.attendance[id];
+                csv += `${att.date},${att.employee_name},${att.start_time},${att.end_time},${att.net_hours},${att.status}\n`;
+            }
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'attendance-' + new Date().getTime() + '.csv';
+            a.click();
+        }
+
+        function showMessage(id, msg, type) {
+            const el = document.getElementById(id);
+            el.textContent = msg;
+            el.className = 'message ' + type;
+            el.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
