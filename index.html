@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Furniture Payroll Tracker v5</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; color: #333; }
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center; z-index: 2000; }
+        .modal.hidden { display: none; }
+        .modal-content { background: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .modal-content h2 { margin-bottom: 20px; color: #2c3e50; }
+        .form-group { margin: 15px 0; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 13px; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 13px; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: #3498db; box-shadow: 0 0 5px rgba(52, 152, 219, 0.3); }
+        .btn { padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; font-size: 13px; font-weight: bold; }
+        .btn-primary { background: #3498db; color: white; width: 100%; }
+        .btn-primary:hover { background: #2980b9; }
+        .btn-primary:disabled { background: #95a5a6; cursor: not-allowed; }
+        .btn-small { padding: 5px 10px; font-size: 12px; margin: 2px; width: auto; }
+        .btn-add { background: #27ae60; color: white; width: auto; margin: 15px 0; }
+        .btn-add:hover { background: #229954; }
+        .btn-edit { background: #f39c12; color: white; }
+        .btn-edit:hover { background: #e67e22; }
+        .btn-save { background: #16a085; color: white; }
+        .btn-save:hover { background: #138d75; }
+        .btn-cancel { background: #95a5a6; color: white; }
+        .btn-cancel:hover { background: #7f8c8d; }
+        .btn-delete { background: #e74c3c; color: white; }
+        .btn-delete:hover { background: #c0392b; }
+        .btn-close { background: #95a5a6; color: white; margin-top: 15px; }
+        .app-header { background: #2c3e50; color: white; padding: 20px; text-align: center; }
+        .app-header h1 { margin-bottom: 15px; }
+        .nav-tabs { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; justify-content: center; }
+        .tab-btn { padding: 10px 15px; background: #34495e; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 13px; }
+        .tab-btn.active { background: #3498db; }
+        .tab-btn:hover { background: #3498db; }
+        main { padding: 20px; max-width: 1400px; margin: 0 auto; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin: 15px 0; }
+        .card h3 { color: #2c3e50; margin-bottom: 15px; }
+        .card table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
+        .card table th { background: #34495e; color: white; padding: 10px; text-align: left; }
+        .card table td { padding: 10px; border-bottom: 1px solid #ddd; }
+        .card table input { width: 95%; padding: 5px; }
+        .card table tr:hover { background: #f9f9f9; }
+        .success { color: #2ecc71; font-weight: bold; }
+        .error { color: #e74c3c; font-weight: bold; }
+        .edit-row { background: #fffacd; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Firebase Setup Modal -->
+        <div id="firebase-setup-modal" class="modal">
+            <div class="modal-content">
+                <h2>🔐 Firebase Setup</h2>
+                <p style="margin-bottom: 20px; font-size: 13px;">Enter your Firebase Realtime Database credentials:</p>
+                <div class="form-group">
+                    <label>API Key:</label>
+                    <input type="text" id="apiKey" placeholder="AIzaSy...">
+                </div>
+                <div class="form-group">
+                    <label>Auth Domain:</label>
+                    <input type="text" id="authDomain" placeholder="project.firebaseapp.com">
+                </div>
+                <div class="form-group">
+                    <label>Database URL:</label>
+                    <input type="text" id="databaseURL" placeholder="https://project.firebaseio.com">
+                </div>
+                <div class="form-group">
+                    <label>Project ID:</label>
+                    <input type="text" id="projectId" placeholder="project-id">
+                </div>
+                <button onclick="setupFirebase()" class="btn btn-primary" id="setupBtn">Connect to Firebase</button>
+                <p id="setupError" class="error" style="margin-top: 15px; display: none;"></p>
+            </div>
+        </div>
+
+        <!-- Main App -->
+        <div id="main-app" style="display:none;">
+            <header class="app-header">
+                <h1>🛠️ Furniture Payroll Tracker v5</h1>
+                <div class="nav-tabs">
+                    <button class="tab-btn active" onclick="switchTab(event, 'dashboard')">Dashboard</button>
+                    <button class="tab-btn" onclick="switchTab(event, 'team')">Team</button>
+                    <button class="tab-btn" onclick="switchTab(event, 'attendance')">Attendance</button>
+                    <button class="tab-btn" onclick="switchTab(event, 'advances')">Advances</button>
+                    <button class="tab-btn" onclick="switchTab(event, 'dailyLabor')">Daily Labor</button>
+                    <button class="tab-btn" onclick="switchTab(event, 'payroll')">Payroll</button>
+                    <button class="tab-btn" onclick="switchTab(event, 'export')">Export</button>
+                </div>
+            </header>
+            <main id="tab-content"></main>
+        </div>
+
+        <!-- Add Employee Modal -->
+        <div id="add-employee-modal" class="modal hidden">
+            <div class="modal-content">
+                <h2>Add Employee</h2>
+                <div class="form-group"><label>Name:</label><input type="text" id="emp-name"></div>
+                <div class="form-group"><label>Role:</label><input type="text" id="emp-role"></div>
+                <div class="form-group"><label>Salary (₹):</label><input type="number" id="emp-salary"></div>
+                <div class="form-group"><label>Hire Date:</label><input type="date" id="emp-hire-date"></div>
+                <div class="form-group"><label>Phone:</label><input type="text" id="emp-phone"></div>
+                <button onclick="saveEmployee()" class="btn btn-primary">Save</button>
+                <button onclick="closeModal('add-employee-modal')" class="btn btn-close">Cancel</button>
+            </div>
+        </div>
+
+        <!-- Add Attendance Modal -->
+        <div id="add-attendance-modal" class="modal hidden">
+            <div class="modal-content">
+                <h2>Add Attendance</h2>
+                <div class="form-group"><label>Date:</label><input type="date" id="att-date"></div>
+                <div class="form-group"><label>Employee:</label><select id="att-employee"></select></div>
+                <div class="form-group"><label>Start Time:</label><input type="text" id="att-start" placeholder="08:30"></div>
+                <div class="form-group"><label>End Time:</label><input type="text" id="att-end" placeholder="19:00"></div>
+                <div class="form-group"><label>Status:</label><select id="att-status"><option>Present</option><option>Absent</option><option>Leave</option><option>Half-day</option></select></div>
+                <button onclick="saveAttendance()" class="btn btn-primary">Save</button>
+                <button onclick="closeModal('add-attendance-modal')" class="btn btn-close">Cancel</button>
+            </div>
+        </div>
+
+        <!-- Add Advance Modal -->
+        <div id="add-advance-modal" class="modal hidden">
+            <div class="modal-content">
+                <h2>Add Advance</h2>
+                <div class="form-group"><label>Employee:</label><select id="adv-employee"></select></div>
+                <div class="form-group"><label>Amount (₹):</label><input type="number" id="adv-amount"></div>
+                <div class="form-group"><label>Date:</label><input type="date" id="adv-date"></div>
+                <div class="form-group"><label>Reason:</label><select id="adv-reason"><option>Personal</option><option>Emergency</option><option>Other</option></select></div>
+                <button onclick="saveAdvance()" class="btn btn-primary">Save</button>
+                <button onclick="closeModal('add-advance-modal')" class="btn btn-close">Cancel</button>
+            </div>
+        </div>
+
+        <!-- Add Daily Labor Modal -->
+        <div id="add-labor-modal" class="modal hidden">
+            <div class="modal-content">
+                <h2>Add Daily Labor</h2>
+                <div class="form-group"><label>Date:</label><input type="date" id="labor-date"></div>
+                <div class="form-group"><label>Name:</label><input type="text" id="labor-name"></div>
+                <div class="form-group"><label>Daily Wage (₹):</label><input type="number" id="labor-wage"></div>
+                <div class="form-group"><label>Hours:</label><input type="number" id="labor-hours" value="8"></div>
+                <button onclick="saveDailyLabor()" class="btn btn-primary">Save</button>
+                <button onclick="closeModal('add-labor-modal')" class="btn btn-close">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
