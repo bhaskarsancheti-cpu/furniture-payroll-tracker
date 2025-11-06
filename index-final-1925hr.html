@@ -82,13 +82,13 @@
             <header class="app-header">
                 <h1>🛠️ Furniture Payroll Tracker - Full Version</h1>
                 <div class="nav-tabs">
-                    <button class="tab-btn active" onclick="switchTab('dashboard')">Dashboard</button>
-                    <button class="tab-btn" onclick="switchTab('team')">Team</button>
-                    <button class="tab-btn" onclick="switchTab('attendance')">Attendance</button>
-                    <button class="tab-btn" onclick="switchTab('advances')">Advances</button>
-                    <button class="tab-btn" onclick="switchTab('dailyLabor')">Daily Labor</button>
-                    <button class="tab-btn" onclick="switchTab('payroll')">Payroll</button>
-                    <button class="tab-btn" onclick="switchTab('export')">Export</button>
+                    <button class="tab-btn active" onclick="switchTab('dashboard', event)">Dashboard</button>
+                    <button class="tab-btn" onclick="switchTab('team', event)">Team</button>
+                    <button class="tab-btn" onclick="switchTab('attendance', event)">Attendance</button>
+                    <button class="tab-btn" onclick="switchTab('advances', event)">Advances</button>
+                    <button class="tab-btn" onclick="switchTab('dailyLabor', event)">Daily Labor</button>
+                    <button class="tab-btn" onclick="switchTab('payroll', event)">Payroll</button>
+                    <button class="tab-btn" onclick="switchTab('export', event)">Export</button>
                 </div>
             </header>
             <main id="tab-content"></main>
@@ -234,8 +234,12 @@
         document.addEventListener('DOMContentLoaded', function() {
             const saved = localStorage.getItem('fbConfig');
             if (saved) {
-                firebaseConfig = JSON.parse(saved);
-                connectFirebase();
+                try {
+                    firebaseConfig = JSON.parse(saved);
+                    connectFirebase();
+                } catch(e) {
+                    console.log('Invalid config');
+                }
             }
         });
 
@@ -268,7 +272,7 @@
                         document.getElementById('firebase-setup-modal').classList.add('hidden');
                         document.getElementById('main-app').style.display = 'block';
                         loadDataFromFirebase();
-                        switchTab('dashboard');
+                        switchTab('dashboard', null);
                         document.getElementById('setupBtn').disabled = false;
                     }
                 });
@@ -294,9 +298,10 @@
             });
         }
 
-        function switchTab(tab) {
+        function switchTab(tab, event) {
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
+            if (event) event.target.classList.add('active');
+            else document.querySelectorAll('.tab-btn')[0].classList.add('active');
 
             if (tab === 'dashboard') renderDashboard();
             else if (tab === 'team') renderTeam();
@@ -327,17 +332,21 @@
                 <button onclick="openModal('add-employee-modal')" class="btn btn-add">+ Add Employee</button>
                 <table><tr><th>Name</th><th>Role</th><th>Salary</th><th>Status</th><th>Actions</th></tr>`;
             
-            for (const id in allData.employees) {
-                const emp = allData.employees[id];
-                html += `<tr>
-                    <td>${emp.name}</td>
-                    <td>${emp.role}</td>
-                    <td>₹${emp.current_salary}</td>
-                    <td>${emp.status}</td>
-                    <td>
-                        <button class="btn btn-small btn-delete" onclick="deleteEmployee('${id}')">Delete</button>
-                    </td>
-                </tr>`;
+            if (Object.keys(allData.employees).length === 0) {
+                html += '<tr><td colspan="5">No employees found</td></tr>';
+            } else {
+                for (const id in allData.employees) {
+                    const emp = allData.employees[id];
+                    html += `<tr>
+                        <td>${emp.name || 'N/A'}</td>
+                        <td>${emp.role || 'N/A'}</td>
+                        <td>₹${emp.current_salary || 0}</td>
+                        <td>${emp.status || 'Active'}</td>
+                        <td>
+                            <button class="btn btn-small btn-delete" onclick="deleteEmployee('${id}')">Delete</button>
+                        </td>
+                    </tr>`;
+                }
             }
             html += '</table></div>';
             document.getElementById('tab-content').innerHTML = html;
@@ -349,19 +358,23 @@
                 <button onclick="openModal('add-attendance-modal')" class="btn btn-add">+ Add Attendance</button>
                 <table><tr><th>Date</th><th>Employee</th><th>Start</th><th>End</th><th>Hours</th><th>Status</th><th>Actions</th></tr>`;
             
-            for (const id in allData.attendance) {
-                const att = allData.attendance[id];
-                html += `<tr>
-                    <td>${att.date}</td>
-                    <td>${att.employee_name}</td>
-                    <td>${att.start_time}</td>
-                    <td>${att.end_time}</td>
-                    <td>${att.net_hours}</td>
-                    <td>${att.status}</td>
-                    <td>
-                        <button class="btn btn-small btn-delete" onclick="deleteAttendance('${id}')">Delete</button>
-                    </td>
-                </tr>`;
+            if (Object.keys(allData.attendance).length === 0) {
+                html += '<tr><td colspan="7">No attendance records found</td></tr>';
+            } else {
+                for (const id in allData.attendance) {
+                    const att = allData.attendance[id];
+                    html += `<tr>
+                        <td>${att.date || 'N/A'}</td>
+                        <td>${att.employee_name || 'N/A'}</td>
+                        <td>${att.start_time || 'N/A'}</td>
+                        <td>${att.end_time || 'N/A'}</td>
+                        <td>${att.net_hours || 0}</td>
+                        <td>${att.status || 'N/A'}</td>
+                        <td>
+                            <button class="btn btn-small btn-delete" onclick="deleteAttendance('${id}')">Delete</button>
+                        </td>
+                    </tr>`;
+                }
             }
             html += '</table></div>';
             document.getElementById('tab-content').innerHTML = html;
@@ -374,18 +387,22 @@
                 <p>Total Pending: ₹${calculateAdvances()}</p>
                 <table><tr><th>Employee</th><th>Amount</th><th>Date</th><th>Reason</th><th>Status</th><th>Actions</th></tr>`;
             
-            for (const id in allData.advances) {
-                const adv = allData.advances[id];
-                html += `<tr>
-                    <td>${adv.employee_name}</td>
-                    <td>₹${adv.amount}</td>
-                    <td>${adv.date_given}</td>
-                    <td>${adv.reason}</td>
-                    <td>${adv.status}</td>
-                    <td>
-                        <button class="btn btn-small btn-delete" onclick="deleteAdvance('${id}')">Delete</button>
-                    </td>
-                </tr>`;
+            if (Object.keys(allData.advances).length === 0) {
+                html += '<tr><td colspan="6">No advances found</td></tr>';
+            } else {
+                for (const id in allData.advances) {
+                    const adv = allData.advances[id];
+                    html += `<tr>
+                        <td>${adv.employee_name || 'N/A'}</td>
+                        <td>₹${adv.amount || 0}</td>
+                        <td>${adv.date_given || 'N/A'}</td>
+                        <td>${adv.reason || 'N/A'}</td>
+                        <td>${adv.status || 'N/A'}</td>
+                        <td>
+                            <button class="btn btn-small btn-delete" onclick="deleteAdvance('${id}')">Delete</button>
+                        </td>
+                    </tr>`;
+                }
             }
             html += '</table></div>';
             document.getElementById('tab-content').innerHTML = html;
@@ -397,19 +414,23 @@
                 <button onclick="openModal('add-labor-modal')" class="btn btn-add">+ Add Entry</button>
                 <table><tr><th>Date</th><th>Name</th><th>Wage</th><th>Hours</th><th>Total</th><th>Actions</th></tr>`;
             
-            for (const id in allData.dailyLabor) {
-                const labor = allData.dailyLabor[id];
-                const total = labor.daily_wage * labor.hours_worked;
-                html += `<tr>
-                    <td>${labor.date}</td>
-                    <td>${labor.name}</td>
-                    <td>₹${labor.daily_wage}</td>
-                    <td>${labor.hours_worked}h</td>
-                    <td>₹${total}</td>
-                    <td>
-                        <button class="btn btn-small btn-delete" onclick="deleteDailyLabor('${id}')">Delete</button>
-                    </td>
-                </tr>`;
+            if (Object.keys(allData.dailyLabor).length === 0) {
+                html += '<tr><td colspan="6">No labor entries found</td></tr>';
+            } else {
+                for (const id in allData.dailyLabor) {
+                    const labor = allData.dailyLabor[id];
+                    const total = (labor.daily_wage || 0) * (labor.hours_worked || 0);
+                    html += `<tr>
+                        <td>${labor.date || 'N/A'}</td>
+                        <td>${labor.name || 'N/A'}</td>
+                        <td>₹${labor.daily_wage || 0}</td>
+                        <td>${labor.hours_worked || 0}h</td>
+                        <td>₹${total}</td>
+                        <td>
+                            <button class="btn btn-small btn-delete" onclick="deleteDailyLabor('${id}')">Delete</button>
+                        </td>
+                    </tr>`;
+                }
             }
             html += '</table></div>';
             document.getElementById('tab-content').innerHTML = html;
@@ -449,13 +470,15 @@
             const emp = { name, role, current_salary: salary, hire_date: hireDate, phone, status: 'Active' };
             
             db.ref('employees/' + id).set(emp, function(error) {
-                if (error) alert('Error saving employee');
+                if (error) alert('Error saving employee: ' + error.message);
                 else {
                     alert('Employee saved!');
                     closeModal('add-employee-modal');
                     document.getElementById('emp-name').value = '';
                     document.getElementById('emp-role').value = '';
                     document.getElementById('emp-salary').value = '';
+                    document.getElementById('emp-hire-date').value = '';
+                    document.getElementById('emp-phone').value = '';
                 }
             });
         }
@@ -474,8 +497,13 @@
             }
 
             const emp = allData.employees[empId];
+            if (!emp) {
+                alert('Employee not found');
+                return;
+            }
+
             const id = 'att_' + Date.now();
-            const netHours = 8; // Simplified
+            const netHours = 8;
             
             const att = { 
                 date, 
@@ -487,10 +515,14 @@
             };
             
             db.ref('attendanceLog/' + id).set(att, function(error) {
-                if (error) alert('Error saving attendance');
+                if (error) alert('Error saving attendance: ' + error.message);
                 else {
                     alert('Attendance saved!');
                     closeModal('add-attendance-modal');
+                    document.getElementById('att-date').value = '';
+                    document.getElementById('att-employee').value = '';
+                    document.getElementById('att-start').value = '';
+                    document.getElementById('att-end').value = '';
                 }
             });
         }
@@ -508,6 +540,11 @@
             }
 
             const emp = allData.employees[empId];
+            if (!emp) {
+                alert('Employee not found');
+                return;
+            }
+
             const id = 'adv_' + Date.now();
             
             const adv = { 
@@ -519,10 +556,13 @@
             };
             
             db.ref('advances/' + id).set(adv, function(error) {
-                if (error) alert('Error saving advance');
+                if (error) alert('Error saving advance: ' + error.message);
                 else {
                     alert('Advance saved!');
                     closeModal('add-advance-modal');
+                    document.getElementById('adv-employee').value = '';
+                    document.getElementById('adv-amount').value = '';
+                    document.getElementById('adv-date').value = '';
                 }
             });
         }
@@ -542,10 +582,14 @@
             const labor = { date, name, daily_wage: wage, hours_worked: hours };
             
             db.ref('dailyLaborers/' + id).set(labor, function(error) {
-                if (error) alert('Error saving entry');
+                if (error) alert('Error saving entry: ' + error.message);
                 else {
                     alert('Entry saved!');
                     closeModal('add-labor-modal');
+                    document.getElementById('labor-date').value = '';
+                    document.getElementById('labor-name').value = '';
+                    document.getElementById('labor-wage').value = '';
+                    document.getElementById('labor-hours').value = '8';
                 }
             });
         }
@@ -620,13 +664,14 @@
             a.href = url;
             a.download = 'payroll-backup-' + new Date().getTime() + '.json';
             a.click();
+            URL.revokeObjectURL(url);
         }
 
         function exportCSV() {
             let csv = 'Date,Employee,Start,End,Hours,Status\n';
             for (const id in allData.attendance) {
                 const att = allData.attendance[id];
-                csv += `${att.date},${att.employee_name},${att.start_time},${att.end_time},${att.net_hours},${att.status}\n`;
+                csv += `"${att.date}","${att.employee_name}","${att.start_time}","${att.end_time}",${att.net_hours},"${att.status}"\n`;
             }
             const blob = new Blob([csv], { type: 'text/csv' });
             const url = URL.createObjectURL(blob);
@@ -634,6 +679,7 @@
             a.href = url;
             a.download = 'attendance-' + new Date().getTime() + '.csv';
             a.click();
+            URL.revokeObjectURL(url);
         }
 
         function showMessage(id, msg, type) {
