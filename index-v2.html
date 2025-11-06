@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Furniture Payroll Tracker</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; color: #333; }
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        .modal.hidden { display: none; }
+        .modal-content { background: white; padding: 40px; border-radius: 10px; width: 90%; max-width: 500px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .modal-content h2 { margin-bottom: 20px; color: #2c3e50; }
+        .modal-content p { margin-bottom: 15px; font-size: 14px; }
+        .input-field { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; }
+        .input-field:focus { outline: none; border-color: #3498db; box-shadow: 0 0 5px rgba(52, 152, 219, 0.3); }
+        .btn { padding: 12px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; width: 100%; margin-top: 20px; }
+        .btn-primary { background: #3498db; color: white; }
+        .btn-primary:hover { background: #2980b9; }
+        .btn-primary:disabled { background: #95a5a6; cursor: not-allowed; }
+        .btn-small { padding: 6px 12px; font-size: 12px; margin: 0 5px; width: auto; }
+        .app-header { background: #2c3e50; color: white; padding: 20px; text-align: center; }
+        .app-header h1 { margin-bottom: 15px; }
+        .nav-tabs { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; justify-content: center; }
+        .tab-btn { padding: 10px 20px; background: #34495e; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; }
+        .tab-btn.active { background: #3498db; }
+        .tab-btn:hover { background: #3498db; }
+        main { padding: 20px; max-width: 1200px; margin: 0 auto; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin: 15px 0; }
+        .card h3 { color: #2c3e50; margin-bottom: 15px; }
+        .card table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
+        .card table th { background: #34495e; color: white; padding: 12px; text-align: left; }
+        .card table td { padding: 10px; border-bottom: 1px solid #ddd; }
+        .card table tr:hover { background: #f9f9f9; }
+        .success { color: #2ecc71; font-weight: bold; }
+        .error { color: #e74c3c; font-weight: bold; }
+        .form-group { margin: 15px 0; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 14px; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div id="firebase-setup-modal" class="modal">
+            <div class="modal-content">
+                <h2>🔐 Firebase Setup</h2>
+                <p style="font-size: 13px; margin-bottom: 20px;">Enter your Firebase Realtime Database credentials to connect:</p>
+                <div class="form-group">
+                    <label>API Key:</label>
+                    <input type="text" id="apiKey" placeholder="AIzaSy..." class="input-field">
+                </div>
+                <div class="form-group">
+                    <label>Auth Domain:</label>
+                    <input type="text" id="authDomain" placeholder="project.firebaseapp.com" class="input-field">
+                </div>
+                <div class="form-group">
+                    <label>Database URL:</label>
+                    <input type="text" id="databaseURL" placeholder="https://project.firebaseio.com" class="input-field">
+                </div>
+                <div class="form-group">
+                    <label>Project ID:</label>
+                    <input type="text" id="projectId" placeholder="project-id" class="input-field">
+                </div>
+                <button onclick="connectFirebase()" class="btn btn-primary" id="connectBtn">Connect to Firebase</button>
+                <p id="setupError" class="error" style="margin-top: 15px; display: none; font-size: 13px;"></p>
+            </div>
+        </div>
+
+        <div id="main-app" style="display:none;">
+            <header class="app-header">
+                <h1>🛠️ Furniture Payroll Tracker</h1>
+                <div class="nav-tabs">
+                    <button class="tab-btn active" onclick="showTab('dashboard', event)">Dashboard</button>
+                    <button class="tab-btn" onclick="showTab('team', event)">Team</button>
+                    <button class="tab-btn" onclick="showTab('attendance', event)">Attendance</button>
+                    <button class="tab-btn" onclick="showTab('advances', event)">Advances</button>
+                    <button class="tab-btn" onclick="showTab('dailyLabor', event)">Daily Labor</button>
+                    <button class="tab-btn" onclick="showTab('payroll', event)">Payroll</button>
+                    <button class="tab-btn" onclick="showTab('export', event)">Export</button>
+                </div>
+            </header>
+            <main id="tab-content"></main>
+        </div>
+    </div>
+
+    <!-- FIREBASE SDK - LOADS FIRST -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js"></script>
+    
+    <!-- APP SCRIPT - LOADS AFTER FIREBASE -->
+    <script src="app.js" defer></script>
+</body>
+</html>
