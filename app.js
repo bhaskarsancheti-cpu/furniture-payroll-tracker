@@ -253,97 +253,118 @@ if (window.__ATTENDANCE_APP_LOADED) {
      * computePayrollForEmployee(employee, month)
      * authoritative payroll calc: pro-rata, half-day normalization, absence deduction, overtime(1.5x), advance deduction
      */
-    function computePayrollForEmployee(employee, month) {
-      employee = employee || {};
-      const expectedHours = employee.expected_monthly_hours || 0;
-      const monthAttendance = attendanceLog.filter(a => a.date && a.date.startsWith(month) && Number(a.employee_id) === Number(employee.id));
+   function computePayrollForEmployee(employee, month) {
+  employee = employee || {};
+  // full-month expected hours from profile (e.g. 192)
+  const fullMonthExpected = employee.expected_monthly_hours || 0;
 
-      let workedHours = 0;
-      let overtimeHours = 0;
-      let halfDayCount = 0;
-      let absentCount = 0;
-      let leaveCount = 0;
-      const notes = [];
+  // Gather attendance rows for this employee in the month
+  const monthAttendance = attendanceLog.filter(a => a.date && a.date.startsWith(month) && Number(a.employee_id) === Number(employee.id));
 
-      monthAttendance.forEach(entry => {
-        const norm = normalizeAttendanceEntry(entry, employee);
-        const net = norm.net_hours;
-        const expected = norm.expected_hours || 0;
-        const status = norm.status;
+  // Compute worked hours, overtime, and counts using normalizeAttendanceEntry()
+  let workedHours = 0;
+  let overtimeHours = 0;
+  let halfDayCount = 0;
+  let absentCount = 0;
+  let leaveCount = 0;
+  const notes = [];
 
-        if (status === 'Present') {
-          workedHours += net;
-          if (net > expected) overtimeHours += Math.max(0, net - expected);
-        } else if (status === 'Half-day') {
-          halfDayCount += 1;
-          workedHours += net;
-          if (net > expected) overtimeHours += Math.max(0, net - expected);
-        } else if (status === 'Leave') {
-          leaveCount += 1;
-          notes.push(`Leave on ${entry.date}`);
-        } else if (status === 'Absent') {
-          absentCount += 1;
-          notes.push(`Absent on ${entry.date}`);
-        } else {
-          workedHours += net;
-          if (net > expected) overtimeHours += Math.max(0, net - expected);
-        }
-      });
+  monthAttendance.forEach(entry => {
+    const norm = normalizeAttendanceEntry(entry, employee);
+    const net = norm.net_hours;
+    const expectedForDate = norm.expected_hours || 0;
+    const status = norm.status;
 
-      const hourlyRate = expectedHours > 0 ? ((employee.salary_monthly || 0) / expectedHours) : 0;
-      const absenceHours = Math.max(0, expectedHours - workedHours);
-      const absenceDeduction = Math.round(absenceHours * hourlyRate);
-      const overtimePay = Math.round(overtimeHours * hourlyRate * 1.5);
-
-      // Pro-rata for hires within the month
-      let proRataFactor = 1;
-      if (employee.hire_date) {
-        try {
-          const hire = new Date(employee.hire_date + 'T00:00:00');
-          const [y, m] = month.split('-').map(Number);
-          const monthStart = new Date(y, m - 1, 1);
-          const monthEnd = new Date(y, m, 0);
-          if (hire > monthStart && hire <= monthEnd) {
-            const daysInMonth = monthEnd.getDate();
-            const workedDays = daysInMonth - hire.getDate() + 1;
-            proRataFactor = (workedDays / daysInMonth);
-            notes.push(`Pro-rata applied (${workedDays}/${daysInMonth} days) due to hire ${employee.hire_date}`);
-          } else if (hire > monthEnd) {
-            proRataFactor = 0;
-            notes.push(`Hired after month — no base pay`);
-          }
-        } catch (e) {
-          // ignore
-        }
-      }
-
-      const basePay = Math.round((employee.salary_monthly || 0) * proRataFactor);
-
-      const advanceDeduction = Math.round((advances || []).filter(a => Number(a.employee_id) === Number(employee.id) && (a.status === 'Pending' || a.status === 'Partial')).reduce((s, a) => {
-        const remaining = (a.amount || 0) - (a.amount_deducted || 0);
-        return s + Math.max(0, remaining);
-      }, 0));
-
-      const finalPay = Math.round(basePay - absenceDeduction + overtimePay - advanceDeduction);
-
-      return {
-        expectedHours,
-        workedHours,
-        halfDayCount,
-        absentCount,
-        leaveCount,
-        absenceHours,
-        overtimeHours,
-        hourlyRate,
-        absenceDeduction,
-        overtimePay,
-        proRataFactor,
-        basePay,
-        advanceDeduction,
-        finalPay,
-        notes
-      };
+    if (status === 'Present') {
+      workedHours += net;
+      if (net > expectedForDate) overtimeHours += Math.max(0, net - expectedForDate);
+    } else if (status === 'Half-day') {
+      halfDayCount += 1;
+      workedHours += net;
+      if (net > expectedForDate) overtimeHours += Math.max(0, net - expectedForDate);
+    } else if (status === 'Leave') {
+      leaveCount += 1;
+      notes.push(`Leave on ${entry.date}`);
+    } else if (status === 'Absent') {
+      absentCount += 1;
+      notes.push(`Absent on ${entry.date}`);
+    } else {
+      // unknown or custom statuses: treat like presence
+      workedHours += net;
+      if (net > expectedForDate) overtimeHours += Math.max(0, net - expectedForDate);
     }
+  });
+
+  // --- pro-rata handling for hire_date inside the month ---
+  let proRataFactor = 1;
+  if (employee.hire_date) {
+    try {
+      const hire = new Date(employee.hire_date + 'T00:00:00');
+      const [y, m] = month.split('-').map(Number);
+      const monthStart = new Date(y, m - 1, 1);
+      const monthEnd = new Date(y, m, 0);
+      if (hire > monthStart && hire <= monthEnd) {
+        const daysInMonth = monthEnd.getDate();
+        const workedDays = daysInMonth - hire.getDate() + 1;
+        proRataFactor = (workedDays / daysInMonth);
+      } else if (hire > monthEnd) {
+        proRataFactor = 0; // hired after month
+      }
+    } catch (e) {
+      proRataFactor = 1;
+    }
+  }
+
+  // base pay is the salary pro-rated for month (rounded)
+  const basePay = Math.round((employee.salary_monthly || 0) * proRataFactor);
+
+  // pro-rated expected hours for the month (important fix):
+  // if employee.expected_monthly_hours is defined, scale it by proRataFactor.
+  const proRatedExpectedHours = Math.round((fullMonthExpected || 0) * proRataFactor * 100) / 100; // keep 2dp precision
+
+  // If proRatedExpectedHours is zero (e.g., unpaid month), avoid divide-by-zero
+  let hourlyRate = 0;
+  if (proRatedExpectedHours > 0) {
+    hourlyRate = basePay / proRatedExpectedHours;
+  } else {
+    // fallback to monthly nominal hourly rate (best-effort)
+    hourlyRate = (fullMonthExpected > 0) ? ((employee.salary_monthly || 0) / fullMonthExpected) : 0;
+  }
+
+  // Deduction: missing hours = expected - worked (cannot be negative here)
+  const absenceHours = Math.max(0, proRatedExpectedHours - workedHours);
+  const absenceDeduction = Math.round(absenceHours * hourlyRate);
+
+  // Overtime pay at 1.5x
+  const overtimePay = Math.round(overtimeHours * hourlyRate * 1.5);
+
+  // Advances pending
+  const advanceDeduction = Math.round((advances || []).filter(a => Number(a.employee_id) === Number(employee.id) && (a.status === 'Pending' || a.status === 'Partial')).reduce((s, a) => {
+    const remaining = (a.amount || 0) - (a.amount_deducted || 0);
+    return s + Math.max(0, remaining);
+  }, 0));
+
+  // final pay
+  const finalPay = Math.round(basePay - absenceDeduction + overtimePay - advanceDeduction);
+
+  return {
+    expectedHours: proRatedExpectedHours,
+    workedHours,
+    halfDayCount,
+    absentCount,
+    leaveCount,
+    absenceHours,
+    overtimeHours,
+    hourlyRate,
+    absenceDeduction,
+    overtimePay,
+    proRataFactor,
+    basePay,
+    advanceDeduction,
+    finalPay,
+    notes
+  };
+}
 
     // REPLACED calculateEmployeeStats wrapper (correct counts + uses computePayrollForEmployee)
     function calculateEmployeeStats(employee, month) {
