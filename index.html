@@ -11,73 +11,34 @@
   <!-- optional while testing, leave out app-check for now -->
 
   <style>
-    /* Minimal, stable layout so app.js DOM assumptions render correctly.
-       Keep your original CSS if you prefer—this is intentionally neutral. */
-    :root {
-      --bg: #faf9f7;
-      --card: #fff;
-      --muted: #666;
-      --accent: #2c6f6f;
-      --danger: #e23b3b;
-    }
-    * { box-sizing: border-box; }
-    body { font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; margin:0; background:var(--bg); color:#111; }
-    .app-container { max-width:1200px; margin:24px auto; padding:20px; }
-    .header { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:18px; }
-    .brand { font-size:20px; font-weight:700; }
-    .month-selector label { font-size:13px; color:var(--muted); margin-right:8px; }
-    .tabs { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
-    .tab { background:var(--card); padding:8px 12px; border-radius:8px; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,0.04); }
-    .tab.active { background:var(--accent); color:#fff; }
-    .tab-content { display:none; background:transparent; }
-    .tab-content.active { display:block; }
-    .stats-grid { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
-    .stat-card { background:var(--card); padding:12px; border-radius:8px; min-width:180px; box-shadow:0 1px 3px rgba(0,0,0,0.04); }
-    .employee-cards { display:flex; gap:12px; flex-wrap:wrap; }
-    .employee-card { background:var(--card); padding:12px; border-radius:8px; width:260px; box-shadow:0 1px 3px rgba(0,0,0,0.04); cursor:pointer; }
-    .employee-header { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-    .employee-name { font-weight:600; }
-    .employee-role { color:var(--muted); font-size:13px; }
-    .table-container { background:var(--card); padding:10px; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.04); overflow:auto; }
-    table { width:100%; border-collapse:collapse; font-size:13px; }
-    th, td { padding:10px; border-bottom:1px solid #eee; text-align:left; }
-    th { background:#fafafa; color:var(--muted); font-weight:600; }
-    .btn { padding:8px 12px; border-radius:6px; border:none; cursor:pointer; background:var(--accent); color:#fff; }
-    .btn.secondary { background:#eee; color:#111; }
-    .form-control { padding:8px 10px; border-radius:6px; border:1px solid #ddd; width:100%; }
-    .form-row { display:flex; gap:12px; }
-    .form-row > div { flex:1; }
-    .modal { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,0.35); z-index:1000; }
-    .modal.active { display:flex; }
-    .modal-content { width:680px; max-width:95%; background:#fff; border-radius:8px; padding:16px; box-shadow:0 6px 30px rgba(0,0,0,0.25); }
-    .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
-    .close-btn { background:transparent; border:none; font-size:18px; cursor:pointer; }
-    .toast { position:fixed; right:20px; bottom:20px; padding:10px 14px; border-radius:8px; background:var(--accent); color:#fff; display:none; z-index:1100; }
-    .toast.show { display:block; }
-    .calendar-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-top:12px; }
-    .calendar-day { background:var(--card); padding:8px; border-radius:6px; text-align:center; }
-    .calendar-day.weekend { opacity:0.6; }
-    .attendance-item { background:var(--card); padding:10px; border-radius:8px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
-    .status-badge { padding:6px 8px; border-radius:6px; font-size:13px; }
-    .status-present { background:#dff7ef; color:#0b6b4a; }
-    .status-absent { background:#ffecec; color:#9b2b2b; }
-    .status-leave { background:#fff4e6; color:#8a4a00; }
-    .action-icons button { border:none; background:transparent; cursor:pointer; font-size:16px; }
-    .small-note { color:var(--muted); font-size:12px; margin-top:8px; }
-    /* responsive */
-    @media (max-width:800px) {
-      .form-row { flex-direction:column; }
-      .employee-cards { justify-content:center; }
-    }
+    /* Minimal layout to match app.js expectations (IDs, classes) */
+    :root{--bg:#faf9f7;--card:#fff;--muted:#666;--accent:#2c6f6f}
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui; margin:0; background:var(--bg); color:#111}
+    .app-container{max-width:1200px;margin:24px auto;padding:20px}
+    .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+    .tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+    .tab{background:var(--card);padding:8px 12px;border-radius:8px;cursor:pointer}
+    .tab.active{background:var(--accent);color:#fff}
+    .tab-content{display:none}
+    .tab-content.active{display:block}
+    .btn{background:var(--accent);color:#fff;border:none;padding:8px 12px;border-radius:6px;cursor:pointer}
+    .btn.secondary{background:#eee;color:#111}
+    .form-control{padding:8px;border-radius:6px;border:1px solid #ddd;width:100%}
+    .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.35)}
+    .modal.active{display:flex}
+    .modal-content{width:680px;max-width:95%;background:#fff;border-radius:8px;padding:16px}
+    .toast{position:fixed;right:20px;bottom:20px;padding:10px 14px;border-radius:8px;background:var(--accent);color:#fff;display:none}
+    .toast.show{display:block}
   </style>
 </head>
 <body>
   <div class="app-container">
     <div class="header">
-      <div class="brand">Attendance & Payroll Tracker</div>
-      <div class="month-selector">
-        <label for="monthYear">Month:</label>
-        <input id="monthYear" type="month" value="">
+      <div style="font-weight:700">Attendance & Payroll Tracker</div>
+      <div>
+        <label for="monthYear" style="color:#666;font-size:13px;margin-right:8px">Month:</label>
+        <input id="monthYear" type="month">
       </div>
     </div>
 
@@ -91,192 +52,102 @@
       <div class="tab" data-tab="export">Export/Backup</div>
     </div>
 
-    <!-- Dashboard -->
+    <!-- (body content — IDs and structure expected by app.js) -->
     <div id="dashboard" class="tab-content active">
-      <div class="stats-grid">
-        <div class="stat-card">
-          <h4>Total Monthly Payroll</h4>
-          <div id="totalPayroll">₹0</div>
-          <div class="small-note">For selected month</div>
-        </div>
-        <div class="stat-card">
-          <h4>Attendance Rate</h4>
-          <div id="attendanceRate">0%</div>
-          <div class="small-note">Overall presence</div>
-        </div>
-        <div class="stat-card">
-          <h4>Total Hours Worked</h4>
-          <div id="totalHours">0</div>
-          <div class="small-note">All employees combined</div>
-        </div>
-        <div class="stat-card">
-          <h4>Active Employees</h4>
-          <div id="activeEmployees">0</div>
-          <div class="small-note">Salaried workers</div>
-        </div>
+      <div>
+        Total Payroll: <span id="totalPayroll">₹0</span> |
+        Attendance Rate: <span id="attendanceRate">0%</span> |
+        Total Hours: <span id="totalHours">0</span> |
+        Active Employees: <span id="activeEmployees">0</span>
       </div>
-
-      <h3>Employee Overview</h3>
-      <div id="employeeCards" class="employee-cards"></div>
+      <div id="employeeCards" style="margin-top:12px"></div>
     </div>
 
-    <!-- Employees -->
-    <div id="employees" class="tab-content">
+    <div id="employees" class="tab-content" style="display:none">
       <div id="employeesList">
         <h3>Select an Employee</h3>
-        <div id="employeeSelectCards" class="employee-cards"></div>
+        <div id="employeeSelectCards"></div>
       </div>
-
-      <div id="employeeDetail" style="display:none;">
+      <div id="employeeDetail" style="display:none">
         <button class="btn secondary" onclick="showEmployeesList()">← Back to Employees</button>
-        <div id="employeeDetailHeader" style="margin-top:12px;"></div>
-        <div style="margin-top:12px;">
-          <button class="btn" onclick="openAttendanceModal()">+ Add Attendance Entry</button>
-        </div>
-
-        <h4 style="margin-top:16px;">Monthly Calendar</h4>
-        <div id="employeeCalendar" class="calendar-grid"></div>
-
-        <h4 style="margin-top:16px;">Attendance Records</h4>
-        <div id="attendanceRecords"></div>
-
-        <div id="employeePayrollSummary" style="margin-top:12px;"></div>
+        <div id="employeeDetailHeader"></div>
+        <button class="btn" onclick="openAttendanceModal()">+ Add Attendance Entry</button>
+        <div id="employeeCalendar" style="margin-top:12px"></div>
+        <div id="attendanceRecords" style="margin-top:12px"></div>
+        <div id="employeePayrollSummary" style="margin-top:12px"></div>
       </div>
     </div>
 
-    <!-- Employee Management (Add/Edit employees) -->
-    <div id="employee-management" class="tab-content" style="display:none;">
+    <div id="employee-management" class="tab-content" style="display:none">
       <h3>Employee Management</h3>
-      <div style="display:flex; gap:12px; align-items:center; margin-bottom:12px;">
-        <button class="btn" onclick="document.getElementById('addEmployeeModal').classList.add('active')">+ Add Employee</button>
-      </div>
-
-      <div id="employeesTable" class="table-container">
-        <table>
-          <thead>
-            <tr><th>ID</th><th>Name</th><th>Role</th><th>Salary</th><th>Actions</th></tr>
-          </thead>
-          <tbody id="employeesTableBody"></tbody>
-        </table>
-      </div>
+      <button class="btn" onclick="document.getElementById('addEmployeeModal').classList.add('active')">+ Add Employee</button>
+      <div id="employeesTable" style="margin-top:12px"></div>
     </div>
 
-    <!-- Daily Labour -->
-    <div id="daily-labor" class="tab-content" style="display:none;">
+    <div id="daily-labor" class="tab-content" style="display:none">
       <h3>Daily Labour</h3>
       <form id="dailyLaborForm">
-        <div class="form-row">
-          <div><label>Date</label><input id="laborDate" class="form-control" type="date" required></div>
-          <div><label>Name</label><input id="laborName" class="form-control" type="text" required></div>
+        <div style="display:flex;gap:8px">
+          <input id="laborDate" class="form-control" type="date" required>
+          <input id="laborName" class="form-control" type="text" placeholder="Name" required>
         </div>
-        <div class="form-row" style="margin-top:8px;">
-          <div><label>Wage (₹)</label><input id="laborWage" class="form-control" type="number" value="750" required></div>
-          <div><label>Hours</label><input id="laborHours" class="form-control" type="number" value="8" step="0.1" required></div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <input id="laborWage" class="form-control" type="number" value="750" required>
+          <input id="laborHours" class="form-control" type="number" value="8" step="0.1" required>
         </div>
-        <div style="margin-top:8px;"><label>Notes</label><input id="laborNotes" class="form-control" type="text"></div>
-        <div style="margin-top:12px;"><button class="btn" type="submit">Add Daily Labour</button></div>
+        <div style="margin-top:8px"><input id="laborNotes" class="form-control" type="text" placeholder="Notes"></div>
+        <div style="margin-top:8px"><button class="btn" type="submit">Add Daily Labour</button></div>
       </form>
-
-      <h4 style="margin-top:12px;">This month's labour</h4>
-      <div class="table-container" style="margin-top:8px;">
-        <table>
-          <thead><tr><th>Date</th><th>Name</th><th>Wage</th><th>Hours</th><th>Total</th><th>Notes</th></tr></thead>
-          <tbody id="dailyLaborTableBody"></tbody>
-        </table>
-      </div>
-      <div style="margin-top:10px;">Total Labour Cost: <span id="totalLaborCost">₹0</span></div>
+      <div id="dailyLaborTableBody" style="margin-top:12px"></div>
+      <div>Total Labour Cost: <span id="totalLaborCost">₹0</span></div>
     </div>
 
-    <!-- Advances -->
-    <div id="advances" class="tab-content" style="display:none;">
+    <div id="advances" class="tab-content" style="display:none">
       <h3>Advances</h3>
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center">
         <div>
-          <label>Filter:</label>
-          <select id="advanceFilterEmployee" class="form-control" style="width:160px; display:inline-block; margin-left:6px;"></select>
-          <select id="advanceFilterStatus" class="form-control" style="width:140px; display:inline-block; margin-left:6px;">
+          <select id="advanceFilterEmployee" class="form-control" style="width:200px;display:inline-block"></select>
+          <select id="advanceFilterStatus" class="form-control" style="width:150px;display:inline-block">
             <option value="">All Status</option><option>Pending</option><option>Partial</option><option>Settled</option>
           </select>
         </div>
         <div><button class="btn" onclick="openAddAdvanceModal()">+ Add Advance</button></div>
       </div>
-
-      <div class="table-container">
-        <table>
-          <thead><tr><th>Date Given</th><th>Employee</th><th>Amount</th><th>Reason</th><th>Status</th><th>Deducted</th><th>Balance</th><th>Days Pending</th><th>Actions</th></tr></thead>
-          <tbody id="advancesTableBody"></tbody>
-        </table>
-      </div>
+      <div id="advancesTableBody" style="margin-top:12px;"></div>
     </div>
 
-    <!-- Summary -->
-    <div id="summary" class="tab-content" style="display:none;">
+    <div id="summary" class="tab-content" style="display:none">
       <h3>Monthly Summary</h3>
-      <div class="table-container">
-        <table>
-          <thead><tr><th>Employee</th><th>Role</th><th>Expected Hours</th><th>Actual Hours</th><th>Base Salary</th><th>Deductions (Absence)</th><th>Overtime Pay</th><th>Final Pay</th></tr></thead>
-          <tbody id="summaryTableBody"></tbody>
-        </table>
-      </div>
+      <div id="summaryTableBody"></div>
     </div>
 
-    <!-- Export -->
-    <div id="export" class="tab-content" style="display:none;">
+    <div id="export" class="tab-content" style="display:none">
       <h3>Export / Backup</h3>
-      <p>Download JSON snapshot of current data.</p>
-      <div style="margin-top:8px;"><button id="downloadBackupBtn" class="btn secondary">Download JSON Backup</button></div>
+      <button id="downloadBackupBtn" class="btn secondary">Download JSON Backup</button>
     </div>
   </div>
 
-  <!-- Attendance Modal -->
+  <!-- Attendance Modal (IDs must match app.js) -->
   <div id="attendanceModal" class="modal" role="dialog" aria-hidden="true">
     <div class="modal-content">
-      <div class="modal-header">
+      <div style="display:flex;justify-content:space-between;align-items:center">
         <h3>Add Attendance</h3>
-        <button class="close-btn" onclick="closeAttendanceModal()">✕</button>
+        <button onclick="closeAttendanceModal()" class="close-btn">✕</button>
       </div>
       <form id="attendanceForm">
-        <div style="display:flex; gap:12px;">
-          <div style="flex:1;">
-            <label>Employee</label>
-            <select id="entryEmployee" class="form-control" required></select>
-          </div>
-          <div style="flex:1;">
-            <label>Date</label>
-            <input id="entryDate" type="date" class="form-control" required>
-          </div>
-        </div>
-
-        <div class="form-row" style="margin-top:8px;">
-          <div>
-            <label>Status</label>
-            <select id="entryStatus" class="form-control">
-              <option value="Present">Present</option>
-              <option value="Half-day">Half-day</option>
-              <option value="Leave">Leave</option>
-              <option value="Absent">Absent</option>
-            </select>
-          </div>
-          <div>
-            <label>Start Time</label>
-            <input id="entryStartTime" class="form-control" type="time">
-          </div>
-          <div>
-            <label>End Time</label>
-            <input id="entryEndTime" class="form-control" type="time">
-          </div>
-        </div>
-
-        <div style="margin-top:8px;">
-          <label>Notes</label>
-          <input id="entryNotes" class="form-control" type="text">
-        </div>
-
-        <div style="margin-top:8px;">
-          <div>Computed: Break: <span id="computedBreak">30 mins</span> • Expected: <span id="computedExpectedHours">0 hrs</span> • Net: <span id="computedNetHours">0 hrs</span></div>
-        </div>
-
-        <div style="margin-top:12px; display:flex; gap:8px; justify-content:flex-end;">
+        <select id="entryEmployee" class="form-control" required></select>
+        <input id="entryDate" type="date" class="form-control" required>
+        <select id="entryStatus" class="form-control">
+          <option value="Present">Present</option>
+          <option value="Half-day">Half-day</option>
+          <option value="Leave">Leave</option>
+          <option value="Absent">Absent</option>
+        </select>
+        <input id="entryStartTime" type="time" class="form-control">
+        <input id="entryEndTime" type="time" class="form-control">
+        <input id="entryNotes" class="form-control" type="text" placeholder="Notes">
+        <div>Break: <span id="computedBreak">30 mins</span> • Expected: <span id="computedExpectedHours">0 hrs</span> • Net: <span id="computedNetHours">0 hrs</span></div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
           <button class="btn" type="submit">Save Attendance</button>
           <button class="btn secondary" type="button" onclick="closeAttendanceModal()">Cancel</button>
         </div>
@@ -287,21 +158,16 @@
   <!-- Add Advance Modal -->
   <div id="addAdvanceModal" class="modal" role="dialog" aria-hidden="true">
     <div class="modal-content">
-      <div class="modal-header">
+      <div style="display:flex;justify-content:space-between;align-items:center">
         <h3>Add Advance</h3>
-        <button class="close-btn" onclick="document.getElementById('addAdvanceModal').classList.remove('active')">✕</button>
+        <button onclick="document.getElementById('addAdvanceModal').classList.remove('active')" class="close-btn">✕</button>
       </div>
       <form id="addAdvanceForm">
-        <div>
-          <label>Employee</label>
-          <select id="advanceEmployee" class="form-control" required></select>
-        </div>
-        <div class="form-row" style="margin-top:8px;">
-          <div><label>Date</label><input id="advanceDate" type="date" class="form-control"></div>
-          <div><label>Amount (₹)</label><input id="advanceAmount" type="number" class="form-control" required></div>
-        </div>
-        <div style="margin-top:8px;"><label>Reason</label><input id="advanceReason" class="form-control" type="text"></div>
-        <div style="margin-top:12px; display:flex; gap:8px; justify-content:flex-end;">
+        <select id="advanceEmployee" class="form-control" required></select>
+        <input id="advanceDate" type="date" class="form-control">
+        <input id="advanceAmount" type="number" class="form-control" required>
+        <input id="advanceReason" class="form-control" type="text">
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
           <button class="btn" type="submit">Add Advance</button>
           <button class="btn secondary" type="button" onclick="document.getElementById('addAdvanceModal').classList.remove('active')">Cancel</button>
         </div>
@@ -309,5 +175,39 @@
     </div>
   </div>
 
-  <!-- Add Employee Modal -->
-  <div
+  <div class="toast" id="toast"></div>
+
+  <!-- tiny tab script (so app.js renderers are triggered) -->
+  <script>
+    (function(){
+      // set default month
+      const m = document.getElementById('monthYear');
+      if (m) {
+        const now = new Date();
+        m.value = now.toISOString().slice(0,7);
+        m.addEventListener('change', function(){ if(window.renderDashboard) renderDashboard(); });
+      }
+
+      document.addEventListener('click', function(e){
+        const t = e.target.closest('.tab');
+        if(!t) return;
+        const name = t.dataset.tab;
+        document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));
+        t.classList.add('active');
+        const el = document.getElementById(name);
+        if (el) el.classList.add('active');
+        // call renderers
+        try { if (name === 'dashboard' && window.renderDashboard) window.renderDashboard(); } catch(e){}
+        try { if (name === 'employees' && window.renderEmployeeSelect) window.renderEmployeeSelect(); } catch(e){}
+        try { if (name === 'daily-labor' && window.renderDailyLabor) window.renderDailyLabor(); } catch(e){}
+        try { if (name === 'advances' && window.renderAdvances) window.renderAdvances(); } catch(e){}
+        try { if (name === 'summary' && window.renderSummary) window.renderSummary(); } catch(e){}
+      });
+    })();
+  </script>
+
+  <!-- App script -->
+  <script src="/app.js" data-app="attendance-v1"></script>
+</body>
+</html>
