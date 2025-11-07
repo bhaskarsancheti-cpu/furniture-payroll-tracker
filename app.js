@@ -123,11 +123,9 @@ if (window.__ATTENDANCE_APP_LOADED) {
     let currentUser = "You";
     let firebaseConnected = false;
 
-    // Preserve initial data for seeding
     const INITIAL_EMPLOYEES = JSON.parse(JSON.stringify(employees));
     const INITIAL_ATTENDANCE = JSON.parse(JSON.stringify(attendanceLog));
 
-    // Utility functions
     function getDayName(dateStr) {
       const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
       const date = new Date(dateStr + 'T00:00:00');
@@ -213,7 +211,6 @@ if (window.__ATTENDANCE_APP_LOADED) {
       return { actualHours, overtimeHours, absenceHours, presentDays, absentDays, expectedHours, deductions, overtimePay, advanceDeduction, finalPay };
     }
 
-    // Renderers
     window.renderDashboard = function () {
       try {
         const salariedEmployees = employees.filter(e => (e.salary_monthly || 0) > 0 && e.status !== 'Inactive');
@@ -308,6 +305,200 @@ if (window.__ATTENDANCE_APP_LOADED) {
         console.error('renderEmployeeSelect error', err);
       }
     };
+
+    window.renderEmployeeManagement = function () {
+      try {
+        const container = document.getElementById('employeesManagementTable');
+        if (!container) return;
+        
+        const allEmployees = employees.filter(e => e.status !== 'Inactive');
+        
+        if (allEmployees.length === 0) {
+          container.innerHTML = '<p style="color:var(--muted);text-align:center">No employees found.</p>';
+          return;
+        }
+        
+        const tableHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Role</th>
+                <th>Monthly Salary</th>
+                <th>Phone</th>
+                <th>Hire Date</th>
+                <th>Expected Monthly Hours</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${allEmployees.map(emp => `
+                <tr>
+                  <td><strong>${emp.name}</strong></td>
+                  <td>${emp.role}</td>
+                  <td>${formatCurrency(emp.salary_monthly || 0)}</td>
+                  <td>${emp.phone || '-'}</td>
+                  <td>${formatDate(emp.hire_date)}</td>
+                  <td>${emp.expected_monthly_hours || 0} hrs</td>
+                  <td><span class="status-badge status-present">${emp.status}</span></td>
+                  <td>
+                    <div class="action-icons">
+                      <button class="icon-btn edit" onclick="editEmployee(${emp.id})" title="Edit">✎</button>
+                      <button class="icon-btn delete" onclick="deleteEmployee(${emp.id})" title="Delete">🗑</button>
+                    </div>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+        container.innerHTML = tableHTML;
+      } catch (err) {
+        console.error('renderEmployeeManagement error', err);
+      }
+    };
+
+    window.openAddEmployeeModal = function () {
+      console.log('openAddEmployeeModal called');
+      const modal = document.getElementById('addEmployeeModal');
+      if (!modal) {
+        console.error('addEmployeeModal not found in DOM');
+        return;
+      }
+      modal.classList.add('active');
+      const hireDate = document.getElementById('empHireDate');
+      if (hireDate) hireDate.value = new Date().toISOString().split('T')[0];
+    };
+
+    window.closeAddEmployeeModal = function () {
+      const modal = document.getElementById('addEmployeeModal');
+      if (modal) modal.classList.remove('active');
+      const form = document.getElementById('addEmployeeForm');
+      if (form) form.reset();
+    };
+
+    window.editEmployee = function(empId) {
+      const emp = employees.find(e => Number(e.id) === Number(empId));
+      if (!emp) return showToast('Employee not found', 'error');
+      
+      const newSalary = prompt('Edit monthly salary for ' + emp.name, emp.salary_monthly);
+      if (newSalary === null) return;
+      
+      emp.salary_monthly = Number(newSalary);
+      emp.salary_history = emp.salary_history || [];
+      emp.salary_history.push({
+        date: new Date().toISOString().split('T')[0],
+        salary: Number(newSalary),
+        reason: 'Salary update'
+      });
+      
+      if (hasFirebase && firebaseConnected) {
+        setDocSafe('employees', emp.id, emp);
+      } else {
+        renderEmployeeManagement();
+        renderDashboard();
+        showToast('Employee updated (local)', 'success');
+      }
+    };
+
+    window.deleteEmployee = function(empId) {
+      const emp = employees.find(e => Number(e.id) === Number(empId));
+      if (!emp) return showToast('Employee not found', 'error');
+      
+      if (!confirm(`Delete employee ${emp.name}? This will mark them as inactive.`)) return;
+      
+      emp.status = 'Inactive';
+      
+      if (hasFirebase && firebaseConnected) {
+        setDocSafe('employees', emp.id, emp);
+      } else {
+        renderEmployeeManagement();
+        renderDashboard();
+        showToast('Employee deleted (local)', 'success');
+      }
+    };
+
+    (function attachAddEmployeeForm() {
+      const form = document.getElementById('addEmployeeForm');
+      if (!form) {
+        console.warn('addEmployeeForm not found');
+        return;
+      }
+      
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const name = document.getElementById('empName').value.trim();
+        const role = document.getElementById('empRole').value.trim();
+        const salary = parseFloat(document.getElementById('empSalary').value);
+        const phone = document.getElementById('empPhone').value.trim();
+        const hireDate = document.getElementById('empHireDate').value;
+        
+        if (!name || !role || !salary || !hireDate) {
+          showToast('Please fill all required fields', 'error');
+          return;
+        }
+        
+        const schedule = {};
+        const days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+        const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        let totalMonthlyHours = 0;
+        
+        days.forEach((day, idx) => {
+          const start = document.getElementById(day + 'Start').value;
+          const end = document.getElementById(day + 'End').value;
+          const breakMins = parseInt(document.getElementById(day + 'Break').value) || 30;
+          
+          if (start && end) {
+            const totalHours = calculateTimeDiff(start, end);
+            const netHours = Math.max(0, totalHours - (breakMins / 60));
+            schedule[dayNames[idx]] = {
+              start,
+              end,
+              break_mins: breakMins,
+              net_hours: parseFloat(netHours.toFixed(1))
+            };
+            totalMonthlyHours += netHours * 4.33;
+          } else {
+            schedule[dayNames[idx]] = 'off';
+          }
+        });
+        
+        const id = nextEmployeeId++;
+        const employee = {
+          id,
+          name,
+          role,
+          salary_monthly: salary,
+          hire_date: hireDate,
+          status: 'Active',
+          phone,
+          salary_history: [{ date: hireDate, salary, reason: 'Initial hire' }],
+          schedule,
+          expected_monthly_hours: Math.round(totalMonthlyHours)
+        };
+        
+        if (hasFirebase && firebaseConnected) {
+          try {
+            await db.collection('employees').doc(String(id)).set(employee);
+            showToast('Employee added successfully', 'success');
+          } catch (err) {
+            console.error('Failed to add employee', err);
+            showToast('Save failed', 'error');
+            return;
+          }
+        } else {
+          employees.push(employee);
+          renderEmployeeManagement();
+          renderDashboard();
+          showToast('Employee added (local)', 'success');
+        }
+        
+        form.reset();
+        closeAddEmployeeModal();
+      });
+    })();
 
     window.renderDailyLabor = function () {
       try {
@@ -502,7 +693,6 @@ if (window.__ATTENDANCE_APP_LOADED) {
       }
     };
 
-    // Attendance modal
     function openAttendanceModal() {
       const modal = document.getElementById('attendanceModal');
       if (modal) modal.classList.add('active');
@@ -624,7 +814,6 @@ if (window.__ATTENDANCE_APP_LOADED) {
       });
     })();
 
-    // Daily labor form
     (function attachDailyLabHandler() {
       const laborForm = document.getElementById('dailyLaborForm');
       if (!laborForm) return;
@@ -666,7 +855,6 @@ if (window.__ATTENDANCE_APP_LOADED) {
       });
     })();
 
-    // Advances
     window.renderAdvances = function () {
       try {
         const empFilter = document.getElementById('advanceFilterEmployee');
@@ -783,7 +971,6 @@ if (window.__ATTENDANCE_APP_LOADED) {
       });
     })();
 
-    // Summary
     window.renderSummary = function () {
       try {
         const tbody = document.getElementById('summaryTableBody');
@@ -805,7 +992,6 @@ if (window.__ATTENDANCE_APP_LOADED) {
       }
     };
 
-    // Export backup
     (function attachDownloadBackup() {
       const btn = document.getElementById('downloadBackupBtn');
       if (!btn) return;
@@ -821,7 +1007,6 @@ if (window.__ATTENDANCE_APP_LOADED) {
       });
     })();
 
-    // Toast
     function showToast(msg, type = 'success') {
       const t = document.querySelector('.toast');
       if (!t) return;
@@ -832,11 +1017,10 @@ if (window.__ATTENDANCE_APP_LOADED) {
     }
     window.showToast = showToast;
 
-    // Firestore connect with IMMEDIATE seeding
     async function connectFirestore() {
       if (!hasFirebase) {
         console.warn('No firebaseConfig — running local-only.');
-        try { renderDashboard(); renderEmployeeSelect(); renderDailyLabor(); renderSummary(); renderAdvances(); } catch (e) {}
+        try { renderDashboard(); renderEmployeeSelect(); renderDailyLabor(); renderSummary(); renderAdvances(); renderEmployeeManagement(); } catch (e) {}
         return;
       }
 
@@ -845,7 +1029,6 @@ if (window.__ATTENDANCE_APP_LOADED) {
         db = firebase.firestore();
         firebaseConnected = true;
 
-        // CHECK AND SEED IMMEDIATELY before setting up listeners
         const employeesSnapshot = await db.collection('employees').limit(1).get();
         
         if (employeesSnapshot.empty && !dataSeeded) {
@@ -868,20 +1051,17 @@ if (window.__ATTENDANCE_APP_LOADED) {
           console.log('✅ Firestore seeded successfully!');
           showToast('Database populated with sample data', 'success');
           
-          // Small delay to let Firestore propagate
           await new Promise(resolve => setTimeout(resolve, 500));
         }
 
-        // NOW set up realtime listeners AFTER seeding is complete
         db.collection('employees').onSnapshot(snapshot => {
           const docs = [];
           snapshot.forEach(doc => docs.push({ id: (/^\d+$/.test(doc.id) ? Number(doc.id) : doc.id), ...doc.data() }));
           
-          // Only update if we have data
           if (docs.length > 0) {
             employees = docs.sort((a,b) => (Number(a.id||0) - Number(b.id||0)));
             nextEmployeeId = (employees.reduce((m,e)=>Math.max(m,Number(e.id||0)),0) || 0) + 1;
-            try { renderDashboard(); renderEmployeeSelect(); renderSummary(); } catch(e){}
+            try { renderDashboard(); renderEmployeeSelect(); renderSummary(); renderEmployeeManagement(); } catch(e){}
           }
         });
 
@@ -918,7 +1098,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
         console.error('Firestore connect failed:', err);
         showToast('Firestore failed — local-only', 'error');
         firebaseConnected = false;
-        try { renderDashboard(); renderEmployeeSelect(); renderDailyLabor(); renderSummary(); renderAdvances(); } catch (e) {}
+        try { renderDashboard(); renderEmployeeSelect(); renderDailyLabor(); renderSummary(); renderAdvances(); renderEmployeeManagement(); } catch (e) {}
       }
     }
 
@@ -939,7 +1119,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
           const idx = advances.findIndex(x => Number(x.id) === Number(id));
           if (idx >= 0) advances[idx] = data; else advances.push(data);
         }
-        try { renderDashboard(); if(currentEmployee) renderEmployeeDetail(currentEmployee); renderDailyLabor(); renderSummary(); renderAdvances(); } catch(e){}
+        try { renderDashboard(); if(currentEmployee) renderEmployeeDetail(currentEmployee); renderDailyLabor(); renderSummary(); renderAdvances(); renderEmployeeManagement(); } catch(e){}
         return;
       }
       try {
@@ -1018,11 +1198,11 @@ if (window.__ATTENDANCE_APP_LOADED) {
     if (monthInput) {
       monthInput.addEventListener('change', (e) => {
         selectedMonth = e.target.value;
-        try { renderDashboard(); if (currentEmployee) renderEmployeeDetail(currentEmployee); renderDailyLabor(); renderSummary(); renderAdvances(); } catch (err) {}
+        try { renderDashboard(); if (currentEmployee) renderEmployeeDetail(currentEmployee); renderDailyLabor(); renderSummary(); } catch (err) {}
       });
     }
 
-    try { renderDashboard(); renderEmployeeCards(); renderEmployeeSelect(); renderDailyLabor(); renderSummary(); renderAdvances(); } catch (e) {}
+    try { renderDashboard(); renderEmployeeCards(); renderEmployeeSelect(); renderDailyLabor(); renderSummary(); renderAdvances(); renderEmployeeManagement(); } catch (e) {}
 
     if (hasFirebase) {
       try {
