@@ -29,7 +29,7 @@
     .form-control{padding:10px;border-radius:6px;border:1px solid #ddd;width:100%;font-size:14px;margin-bottom:8px}
     .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);z-index:1000}
     .modal.active{display:flex}
-    .modal-content{width:680px;max-width:95%;background:#fff;border-radius:12px;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,0.2)}
+    .modal-content{width:680px;max-width:95%;background:#fff;border-radius:12px;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,0.2);max-height:90vh;overflow-y:auto}
     .toast{position:fixed;right:20px;bottom:20px;padding:12px 18px;border-radius:8px;background:var(--success);color:#fff;display:none;z-index:2000;box-shadow:0 4px 12px rgba(0,0,0,0.15)}
     .toast.show{display:block}
     .employee-card{background:var(--card);border:1px solid #e0e0e0;border-radius:10px;padding:16px;margin-bottom:12px;cursor:pointer;transition:all .2s}
@@ -60,7 +60,7 @@
     .status-dropdown{position:relative}
     .status-badge{display:inline-block;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer}
     .status-badge.status-present{background:#d4edda;color:#155724}
-    .status-badge.status-half-day{background:#fff3cd;color:#856404}
+    .status-badge.status-halfday{background:#fff3cd;color:#856404}
     .status-badge.status-leave{background:#d1ecf1;color:#0c5460}
     .status-badge.status-absent{background:#f8d7da;color:#721c24}
     .status-badge.status-overtime{background:#ffe5b4;color:#996515}
@@ -78,6 +78,7 @@
     table th,table td{padding:12px;text-align:left;border-bottom:1px solid #e0e0e0;font-size:14px}
     table th{background:#f5f5f5;font-weight:700}
     table tr:hover{background:#fafafa}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   </style>
 </head>
 <body>
@@ -93,6 +94,7 @@
     <div class="tabs">
       <div class="tab active" data-tab="dashboard">Dashboard</div>
       <div class="tab" data-tab="employees">Employees</div>
+      <div class="tab" data-tab="employee-management">Employee Management</div>
       <div class="tab" data-tab="daily-labor">Daily Labour</div>
       <div class="tab" data-tab="advances">Advances</div>
       <div class="tab" data-tab="summary">Monthly Summary</div>
@@ -134,6 +136,12 @@
         <div id="attendanceRecords" style="margin-top:16px"></div>
         <div id="employeePayrollSummary" style="margin-top:16px;background:var(--card);padding:16px;border-radius:8px;border:1px solid #e0e0e0"></div>
       </div>
+    </div>
+
+    <div id="employee-management" class="tab-content">
+      <h3>Employee Management</h3>
+      <button class="btn" onclick="openAddEmployeeModal()">+ Add Employee</button>
+      <div id="employeesManagementTable" style="margin-top:16px"></div>
     </div>
 
     <div id="daily-labor" class="tab-content">
@@ -246,6 +254,79 @@
     </div>
   </div>
 
+  <div id="addEmployeeModal" class="modal">
+    <div class="modal-content">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 style="margin:0">Add Employee</h3>
+        <button onclick="closeAddEmployeeModal()" class="close-btn">✕</button>
+      </div>
+      <form id="addEmployeeForm">
+        <div class="form-grid">
+          <input id="empName" class="form-control" type="text" placeholder="Name" required>
+          <input id="empRole" class="form-control" type="text" placeholder="Role (e.g., Carpenter)" required>
+        </div>
+        <div class="form-grid">
+          <input id="empSalary" class="form-control" type="number" placeholder="Monthly Salary (₹)" required>
+          <input id="empPhone" class="form-control" type="text" placeholder="Phone (optional)">
+        </div>
+        <input id="empHireDate" class="form-control" type="date" placeholder="Hire Date" required>
+        
+        <h4 style="margin-top:16px;margin-bottom:8px">Weekly Schedule</h4>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Set work hours for each day (leave blank for off days)</div>
+        
+        <div style="display:grid;gap:8px">
+          <div style="display:grid;grid-template-columns:100px 1fr 1fr 80px;gap:8px;align-items:center">
+            <strong>Monday</strong>
+            <input id="monStart" class="form-control" type="time" placeholder="Start">
+            <input id="monEnd" class="form-control" type="time" placeholder="End">
+            <input id="monBreak" class="form-control" type="number" placeholder="Break" value="30">
+          </div>
+          <div style="display:grid;grid-template-columns:100px 1fr 1fr 80px;gap:8px;align-items:center">
+            <strong>Tuesday</strong>
+            <input id="tueStart" class="form-control" type="time">
+            <input id="tueEnd" class="form-control" type="time">
+            <input id="tueBreak" class="form-control" type="number" value="30">
+          </div>
+          <div style="display:grid;grid-template-columns:100px 1fr 1fr 80px;gap:8px;align-items:center">
+            <strong>Wednesday</strong>
+            <input id="wedStart" class="form-control" type="time">
+            <input id="wedEnd" class="form-control" type="time">
+            <input id="wedBreak" class="form-control" type="number" value="30">
+          </div>
+          <div style="display:grid;grid-template-columns:100px 1fr 1fr 80px;gap:8px;align-items:center">
+            <strong>Thursday</strong>
+            <input id="thuStart" class="form-control" type="time">
+            <input id="thuEnd" class="form-control" type="time">
+            <input id="thuBreak" class="form-control" type="number" value="30">
+          </div>
+          <div style="display:grid;grid-template-columns:100px 1fr 1fr 80px;gap:8px;align-items:center">
+            <strong>Friday</strong>
+            <input id="friStart" class="form-control" type="time">
+            <input id="friEnd" class="form-control" type="time">
+            <input id="friBreak" class="form-control" type="number" value="30">
+          </div>
+          <div style="display:grid;grid-template-columns:100px 1fr 1fr 80px;gap:8px;align-items:center">
+            <strong>Saturday</strong>
+            <input id="satStart" class="form-control" type="time">
+            <input id="satEnd" class="form-control" type="time">
+            <input id="satBreak" class="form-control" type="number" value="30">
+          </div>
+          <div style="display:grid;grid-template-columns:100px 1fr 1fr 80px;gap:8px;align-items:center">
+            <strong>Sunday</strong>
+            <input id="sunStart" class="form-control" type="time">
+            <input id="sunEnd" class="form-control" type="time">
+            <input id="sunBreak" class="form-control" type="number" value="30">
+          </div>
+        </div>
+        
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+          <button class="btn" type="submit">Add Employee</button>
+          <button class="btn secondary" type="button" onclick="closeAddEmployeeModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script>
@@ -267,10 +348,19 @@
       if (el) el.classList.add('active');
       try { if (name === 'dashboard' && window.renderDashboard) window.renderDashboard(); } catch(e){}
       try { if (name === 'employees' && window.renderEmployeeSelect) window.renderEmployeeSelect(); } catch(e){}
+      try { if (name === 'employee-management' && window.renderEmployeeManagement) window.renderEmployeeManagement(); } catch(e){}
       try { if (name === 'daily-labor' && window.renderDailyLabor) window.renderDailyLabor(); } catch(e){}
       try { if (name === 'advances' && window.renderAdvances) window.renderAdvances(); } catch(e){}
       try { if (name === 'summary' && window.renderSummary) window.renderSummary(); } catch(e){}
     });
+
+    function closeAddEmployeeModal() {
+      const modal = document.getElementById('addEmployeeModal');
+      if (modal) modal.classList.remove('active');
+      const form = document.getElementById('addEmployeeForm');
+      if (form) form.reset();
+    }
+    window.closeAddEmployeeModal = closeAddEmployeeModal;
   </script>
 
   <script src="./app.js"></script>
