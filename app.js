@@ -241,7 +241,8 @@ if (window.__ATTENDANCE_APP_LOADED) {
       };
     }
 
-    // --- FIXED: compute payroll using day-by-day expected hours (respects overrides & hire_date)
+    // ---------- FIXED: compute payroll using day-by-day expected hours (respects overrides & hire_date)
+    // Replaced previous version to prevent basePay inflation when expectedHours > expected_monthly_hours
     function computePayrollForEmployee(employee, month) {
       employee = employee || {};
       // month is 'YYYY-MM'
@@ -258,7 +259,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
       let expectedHours = 0;
       for (let d = 1; d <= daysInMonth; d++) {
         const dateStr = `${yStr}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-        // if hire_date exists and the hire day is after this date, skip
+        // skip days before hire
         if (employee.hire_date) {
           const hire = new Date(employee.hire_date + 'T00:00:00');
           const thisDate = new Date(dateStr + 'T00:00:00');
@@ -281,22 +282,27 @@ if (window.__ATTENDANCE_APP_LOADED) {
         if (norm.status === 'Leave') leaveDays++;
       });
 
-      // base pay: proportionate to expectedHours vs standard expected_monthly_hours
+      // basePay logic:
+      // - If expectedHours is 0 -> basePay 0
+      // - If expectedHours < employee.expected_monthly_hours -> prorate salary down for partial month
+      // - If expectedHours >= employee.expected_monthly_hours -> DO NOT increase salary; keep basePay = salary
+      const monthlySalary = Number(employee.salary_monthly || 0);
       let basePay = 0;
-      if (expectedHours > 0) {
-        if (employee.expected_monthly_hours && employee.expected_monthly_hours > 0) {
-          basePay = Math.round((employee.salary_monthly || 0) * (expectedHours / employee.expected_monthly_hours));
-        } else {
-          basePay = Math.round(employee.salary_monthly || 0);
-        }
-      } else {
+      if (expectedHours <= 0) {
         basePay = 0;
+      } else if (employee.expected_monthly_hours && employee.expected_monthly_hours > 0) {
+        const ratio = expectedHours / employee.expected_monthly_hours;
+        // Cap ratio at 1.0 — never increase salary beyond the nominal monthly salary
+        const effectiveRatio = Math.min(1, ratio);
+        basePay = Math.round(monthlySalary * effectiveRatio);
+      } else {
+        // no baseline expected_monthly_hours — fall back to full salary
+        basePay = monthlySalary;
       }
 
-      // hourly rate based on expectedHours (if zero fall back to salary/standard)
+      // hourly rate is derived from the basePay and the expected hours for the month
       let hourlyRate = 0;
       if (expectedHours > 0) hourlyRate = basePay / expectedHours;
-      else if (employee.expected_monthly_hours > 0) hourlyRate = (employee.salary_monthly || 0) / employee.expected_monthly_hours;
       else hourlyRate = 0;
 
       const absenceHours = Math.max(0, expectedHours - workedHours);
