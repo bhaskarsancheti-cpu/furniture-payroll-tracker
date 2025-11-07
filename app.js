@@ -870,6 +870,38 @@ if (window.__ATTENDANCE_APP_LOADED) {
 
         console.log('Connected to Firestore. Realtime listeners attached.');
 
+        // AUTO-SEED: Check if Firestore is empty and populate with sample data
+        setTimeout(async () => {
+          try {
+            const employeesSnapshot = await db.collection('employees').limit(1).get();
+            if (employeesSnapshot.empty) {
+              console.log('Firestore is empty. Seeding with initial data...');
+              
+              // Create a batch for atomic writes
+              const batch = db.batch();
+              
+              // Add employees
+              employees.forEach(emp => {
+                const docRef = db.collection('employees').doc(String(emp.id));
+                batch.set(docRef, emp);
+              });
+              
+              // Add attendance
+              attendanceLog.forEach(att => {
+                const docRef = db.collection('attendance').doc(String(att.id));
+                batch.set(docRef, att);
+              });
+              
+              // Commit batch
+              await batch.commit();
+              console.log('✅ Firestore seeded successfully with sample data!');
+              showToast('Database populated with sample data', 'success');
+            }
+          } catch (err) {
+            console.error('Failed to seed Firestore:', err);
+          }
+        }, 2000);
+
       } catch (err) {
         console.error('Firestore connect failed:', err);
         showToast('Firestore failed — local-only', 'error');
