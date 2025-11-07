@@ -1,4 +1,4 @@
-// app.js — Attendance & Payroll Tracker
+// app.js — Attendance & Payroll Tracker (compiled, fixes included)
 if (window.__ATTENDANCE_APP_LOADED) {
   console.log('Attendance app already loaded — skipping duplicate initialization.');
 } else {
@@ -104,6 +104,10 @@ if (window.__ATTENDANCE_APP_LOADED) {
       }
     ];
 
+    // Example: how to set weekly_swap or schedule_overrides
+    // employees[1].weekly_swap = { from: ['monday','tuesday'], to: ['saturday','sunday'] };
+    // employees[1].schedule_overrides = { "2025-11-08": { start: "08:30", end: "17:30", break_mins: 30, net_hours: 8 } };
+
     let attendanceLog = [
       { id: 1, date: "2025-11-03", employee_id: 3, employee_name: "Afghan", role: "Polisher", start_time: "09:15", end_time: "19:45", break_mins: 30, net_hours: 10, expected_hours: 10, status: "Present", overtime_hours: 0, notes: "First day" },
       { id: 2, date: "2025-11-04", employee_id: 1, employee_name: "Dharmendra", role: "Carpenter", start_time: "08:30", end_time: "19:00", break_mins: 30, net_hours: 10, expected_hours: 10, status: "Present", overtime_hours: 0, notes: "" },
@@ -126,6 +130,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
     const INITIAL_EMPLOYEES = JSON.parse(JSON.stringify(employees));
     const INITIAL_ATTENDANCE = JSON.parse(JSON.stringify(attendanceLog));
 
+    // --- Utilities ---
     function getDayName(dateStr) {
       const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
       const date = new Date(dateStr + 'T00:00:00');
@@ -141,8 +146,39 @@ if (window.__ATTENDANCE_APP_LOADED) {
       return (endMinutes - startMinutes) / 60;
     }
 
+    // REPLACED getExpectedHours - supports schedule_overrides and weekly_swap
     function getExpectedHours(employee, dateStr) {
-      if (!employee || !employee.schedule) return 0;
+      if (!employee) return 0;
+
+      // 1) explicit per-date overrides (highest priority)
+      if (employee.schedule_overrides && employee.schedule_overrides[dateStr]) {
+        const o = employee.schedule_overrides[dateStr];
+        if (typeof o.net_hours === 'number') return o.net_hours;
+        if (o.start && o.end) {
+          const total = calculateTimeDiff(o.start, o.end);
+          return Math.max(0, total - ((o.break_mins || 30) / 60));
+        }
+      }
+
+      // 2) weekly swap pattern mapping
+      if (employee.weekly_swap && Array.isArray(employee.weekly_swap.to) && Array.isArray(employee.weekly_swap.from)) {
+        const day = getDayName(dateStr); // 'monday' etc
+        const idxTo = employee.weekly_swap.to.indexOf(day);
+        if (idxTo !== -1) {
+          const mappedFrom = employee.weekly_swap.from[idxTo] || null;
+          if (mappedFrom && employee.schedule && employee.schedule[mappedFrom] && employee.schedule[mappedFrom] !== 'off') {
+            const sch = employee.schedule[mappedFrom];
+            return sch.net_hours || Math.max(0, calculateTimeDiff(sch.start, sch.end) - (sch.break_mins || 30) / 60);
+          }
+        }
+        // If this date is one of the 'from' days and swapped -> treat as off
+        if (employee.weekly_swap.from.indexOf(day) !== -1) {
+          return 0;
+        }
+      }
+
+      // 3) default weekly schedule
+      if (!employee.schedule) return 0;
       const dayName = getDayName(dateStr);
       const daySchedule = employee.schedule[dayName];
       if (!daySchedule || daySchedule === 'off') return 0;
@@ -151,6 +187,10 @@ if (window.__ATTENDANCE_APP_LOADED) {
 
     function getBreakMinutes(employee, dateStr) {
       if (!employee || !employee.schedule) return 30;
+      // check override break mins first
+      if (employee.schedule_overrides && employee.schedule_overrides[dateStr] && typeof employee.schedule_overrides[dateStr].break_mins === 'number') {
+        return employee.schedule_overrides[dateStr].break_mins;
+      }
       const dayName = getDayName(dateStr);
       const daySchedule = employee.schedule[dayName];
       if (!daySchedule || daySchedule === 'off') return 30;
@@ -183,37 +223,35 @@ if (window.__ATTENDANCE_APP_LOADED) {
       }, 0);
     }
 
-    /**
-     * normalizeAttendanceEntry(entry, employee)
-     * returns canonical { net_hours, status, expected_hours }
-     * centralizes half-day/leave/absent handling.
-     */
+    // REPLACED normalizeAttendanceEntry - deterministic half-day/leave handling
     function normalizeAttendanceEntry(entry, employee) {
-      const expected = entry.expected_hours || getExpectedHours(employee, entry.date) || 0;
-      const status = (entry.status || 'Present');
-      let net = Number(entry.net_hours || 0);
+      const expected = (entry && (entry.expected_hours || getExpectedHours(employee, entry.date))) || 0;
+      const rawStatus = (entry && (entry.status || 'Present')) || 'Present';
+      const status = String(rawStatus).trim();
+
+      // base net (if explicit)
+      let net = Number(entry && (entry.net_hours || 0)) || 0;
 
       if (status === 'Present') {
         if (net <= 0) net = expected;
       } else if (status === 'Half-day') {
-        if (net <= 0) net = expected * 0.5;
+        if (net <= 0) net = parseFloat((expected * 0.5).toFixed(2));
       } else if (status === 'Leave' || status === 'Absent') {
         net = 0;
       } else {
         if (net <= 0) net = expected;
       }
 
-      return { net_hours: parseFloat(net.toFixed(2)), status, expected_hours: expected };
+      return {
+        net_hours: parseFloat(net.toFixed(2)),
+        status,
+        expected_hours: expected
+      };
     }
 
     /**
      * computePayrollForEmployee(employee, month)
-     * Deterministic payroll calculation:
-     * - Handles half-day as 50% unless explicit net_hours provided
-     * - Treats Leave and Absent as unpaid (counts expected hours as absence)
-     * - Overtime at 1.5x hourly rate
-     * - Applies pro-rata if hire_date falls within the month
-     * - Deducts pending advances (Pending/Partial)
+     * authoritative payroll calc: pro-rata, half-day normalization, absence deduction, overtime(1.5x), advance deduction
      */
     function computePayrollForEmployee(employee, month) {
       employee = employee || {};
@@ -247,20 +285,14 @@ if (window.__ATTENDANCE_APP_LOADED) {
           absentCount += 1;
           notes.push(`Absent on ${entry.date}`);
         } else {
-          // unknown -> treat as present fallback
           workedHours += net;
           if (net > expected) overtimeHours += Math.max(0, net - expected);
         }
       });
 
-      // Hourly rate (safe)
       const hourlyRate = expectedHours > 0 ? ((employee.salary_monthly || 0) / expectedHours) : 0;
-
-      // Absence hours = expected - worked (non-negative)
       const absenceHours = Math.max(0, expectedHours - workedHours);
       const absenceDeduction = Math.round(absenceHours * hourlyRate);
-
-      // Overtime pay at 1.5x
       const overtimePay = Math.round(overtimeHours * hourlyRate * 1.5);
 
       // Pro-rata for hires within the month
@@ -281,7 +313,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
             notes.push(`Hired after month — no base pay`);
           }
         } catch (e) {
-          // ignore parse errors
+          // ignore
         }
       }
 
@@ -313,15 +345,48 @@ if (window.__ATTENDANCE_APP_LOADED) {
       };
     }
 
-    // Backwards-compatible wrapper: previous function name retained
+    // REPLACED calculateEmployeeStats wrapper (correct counts + uses computePayrollForEmployee)
     function calculateEmployeeStats(employee, month) {
-      const p = computePayrollForEmployee(employee, month);
+      const p = (typeof computePayrollForEmployee === 'function') ? computePayrollForEmployee(employee, month) : null;
+      if (!p) {
+        // fallback (legacy)
+        const monthAttendance = filterAttendanceByMonth(month).filter(entry => Number(entry.employee_id) === Number(employee.id));
+        let actualHours = 0, overtimeHours = 0, absenceHours = 0, presentDays = 0, absentDays = 0;
+        monthAttendance.forEach(entry => {
+          if (entry.status === 'Present' || entry.status === 'Half-day') {
+            actualHours += (entry.net_hours || 0);
+            presentDays++;
+            if ((entry.net_hours || 0) > (entry.expected_hours || 0)) overtimeHours += ((entry.net_hours || 0) - (entry.expected_hours || 0));
+          } else if (entry.status === 'Absent' || entry.status === 'Leave') {
+            absenceHours += (entry.expected_hours || 0);
+            absentDays++;
+          }
+        });
+        const expectedHours = employee.expected_monthly_hours || 0;
+        const hourlyRate = expectedHours > 0 ? (employee.salary_monthly || 0) / expectedHours : 0;
+        const deductions = absenceHours * hourlyRate;
+        const overtimePay = overtimeHours * hourlyRate * 1.5;
+        const advanceDeduction = calculateAdvanceDeduction(employee.id);
+        const finalPay = (employee.salary_monthly || 0) - deductions + overtimePay - advanceDeduction;
+        return { actualHours, overtimeHours, absenceHours, presentDays, absentDays, expectedHours, deductions, overtimePay, advanceDeduction, finalPay };
+      }
+
+      const monthAttendance = filterAttendanceByMonth(month).filter(entry => Number(entry.employee_id) === Number(employee.id));
+      const presentDays = monthAttendance.filter(e => {
+        const s = (e.status || '').toLowerCase();
+        return s === 'present' || s === 'half-day';
+      }).length;
+      const absentDays = monthAttendance.filter(e => {
+        const s = (e.status || '').toLowerCase();
+        return s === 'absent' || s === 'leave';
+      }).length;
+
       return {
         actualHours: p.workedHours,
         overtimeHours: p.overtimeHours,
         absenceHours: p.absenceHours,
-        presentDays: Math.max(0, Math.round((p.workedHours / (employee.expected_monthly_hours || 1)) * (employee.expected_monthly_hours ? (employee.expected_monthly_hours / (employee.expected_monthly_hours || 1)) : 0))), // rough fallback
-        absentDays: p.absentCount,
+        presentDays,
+        absentDays,
         expectedHours: p.expectedHours,
         deductions: p.absenceDeduction,
         overtimePay: p.overtimePay,
@@ -330,10 +395,9 @@ if (window.__ATTENDANCE_APP_LOADED) {
       };
     }
 
-    window.calculateEmployeeStats = calculateEmployeeStats; // expose in case other modules reference it
+    window.calculateEmployeeStats = calculateEmployeeStats;
 
-    // --- rest of the file remains functionally the same, using calculateEmployeeStats where required ---
-
+    // ---------- Renderers & UI handlers (same as before) ----------
     window.renderDashboard = function () {
       try {
         const salariedEmployees = employees.filter(e => (e.salary_monthly || 0) > 0 && e.status !== 'Inactive');
@@ -354,10 +418,10 @@ if (window.__ATTENDANCE_APP_LOADED) {
 
         const attendanceRate = totalExpected > 0 ? Math.round((totalPresent / totalExpected) * 100) : 0;
 
-        document.getElementById('totalPayroll').textContent = formatCurrency(totalPayroll);
-        document.getElementById('attendanceRate').textContent = attendanceRate + '%';
-        document.getElementById('totalHours').textContent = Math.round(totalHours);
-        document.getElementById('activeEmployees').textContent = salariedEmployees.length;
+        document.getElementById('totalPayroll') && (document.getElementById('totalPayroll').textContent = formatCurrency(totalPayroll));
+        document.getElementById('attendanceRate') && (document.getElementById('attendanceRate').textContent = attendanceRate + '%');
+        document.getElementById('totalHours') && (document.getElementById('totalHours').textContent = Math.round(totalHours));
+        document.getElementById('activeEmployees') && (document.getElementById('activeEmployees').textContent = salariedEmployees.length);
 
         renderEmployeeCards();
       } catch (err) {
