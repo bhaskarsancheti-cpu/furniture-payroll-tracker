@@ -19,6 +19,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
   (function () {
     const hasFirebase = firebaseConfig && firebaseConfig.projectId;
     let db = null;
+    let dataSeeded = false;
 
     let employees = [
       {
@@ -121,6 +122,10 @@ if (window.__ATTENDANCE_APP_LOADED) {
     let selectedMonth = document.getElementById('monthYear') ? document.getElementById('monthYear').value : (new Date().toISOString().slice(0,7));
     let currentUser = "You";
     let firebaseConnected = false;
+
+    // Preserve initial data for seeding
+    const INITIAL_EMPLOYEES = JSON.parse(JSON.stringify(employees));
+    const INITIAL_ATTENDANCE = JSON.parse(JSON.stringify(attendanceLog));
 
     // Utility functions
     function getDayName(dateStr) {
@@ -275,6 +280,12 @@ if (window.__ATTENDANCE_APP_LOADED) {
         const container = document.getElementById('employeeSelectCards');
         if (!container) return;
         const salariedEmployees = employees.filter(e => (e.salary_monthly || 0) > 0 && e.status !== 'Inactive');
+        
+        if (salariedEmployees.length === 0) {
+          container.innerHTML = '<p style="color:var(--muted);text-align:center">No employees found. Add employees first.</p>';
+          return;
+        }
+        
         container.innerHTML = salariedEmployees.map(emp => {
           const stats = calculateEmployeeStats(emp, selectedMonth);
           return `
@@ -357,6 +368,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
       } else {
         dailyLaborers = dailyLaborers.filter(l => Number(l.id) !== Number(laborId));
         renderDailyLabor();
+        renderDashboard();
         showToast('Deleted (local)', 'success');
       }
     };
@@ -820,7 +832,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
     }
     window.showToast = showToast;
 
-    // Firestore connect
+    // Firestore connect with IMMEDIATE seeding
     async function connectFirestore() {
       if (!hasFirebase) {
         console.warn('No firebaseConfig — running local-only.');
@@ -833,12 +845,44 @@ if (window.__ATTENDANCE_APP_LOADED) {
         db = firebase.firestore();
         firebaseConnected = true;
 
+        // CHECK AND SEED IMMEDIATELY before setting up listeners
+        const employeesSnapshot = await db.collection('employees').limit(1).get();
+        
+        if (employeesSnapshot.empty && !dataSeeded) {
+          console.log('🔄 Firestore is empty. Seeding now...');
+          dataSeeded = true;
+          
+          const batch = db.batch();
+          
+          INITIAL_EMPLOYEES.forEach(emp => {
+            const docRef = db.collection('employees').doc(String(emp.id));
+            batch.set(docRef, emp);
+          });
+          
+          INITIAL_ATTENDANCE.forEach(att => {
+            const docRef = db.collection('attendance').doc(String(att.id));
+            batch.set(docRef, att);
+          });
+          
+          await batch.commit();
+          console.log('✅ Firestore seeded successfully!');
+          showToast('Database populated with sample data', 'success');
+          
+          // Small delay to let Firestore propagate
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        // NOW set up realtime listeners AFTER seeding is complete
         db.collection('employees').onSnapshot(snapshot => {
           const docs = [];
           snapshot.forEach(doc => docs.push({ id: (/^\d+$/.test(doc.id) ? Number(doc.id) : doc.id), ...doc.data() }));
-          employees = docs.sort((a,b) => (Number(a.id||0) - Number(b.id||0)));
-          nextEmployeeId = (employees.reduce((m,e)=>Math.max(m,Number(e.id||0)),0) || 0) + 1;
-          try { renderDashboard(); renderEmployeeSelect(); renderSummary(); } catch(e){}
+          
+          // Only update if we have data
+          if (docs.length > 0) {
+            employees = docs.sort((a,b) => (Number(a.id||0) - Number(b.id||0)));
+            nextEmployeeId = (employees.reduce((m,e)=>Math.max(m,Number(e.id||0)),0) || 0) + 1;
+            try { renderDashboard(); renderEmployeeSelect(); renderSummary(); } catch(e){}
+          }
         });
 
         db.collection('attendance').onSnapshot(snapshot => {
@@ -868,39 +912,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
           try { renderAdvances(); renderDashboard(); } catch(e){}
         });
 
-        console.log('Connected to Firestore. Realtime listeners attached.');
-
-        // AUTO-SEED: Check if Firestore is empty and populate with sample data
-        setTimeout(async () => {
-          try {
-            const employeesSnapshot = await db.collection('employees').limit(1).get();
-            if (employeesSnapshot.empty) {
-              console.log('Firestore is empty. Seeding with initial data...');
-              
-              // Create a batch for atomic writes
-              const batch = db.batch();
-              
-              // Add employees
-              employees.forEach(emp => {
-                const docRef = db.collection('employees').doc(String(emp.id));
-                batch.set(docRef, emp);
-              });
-              
-              // Add attendance
-              attendanceLog.forEach(att => {
-                const docRef = db.collection('attendance').doc(String(att.id));
-                batch.set(docRef, att);
-              });
-              
-              // Commit batch
-              await batch.commit();
-              console.log('✅ Firestore seeded successfully with sample data!');
-              showToast('Database populated with sample data', 'success');
-            }
-          } catch (err) {
-            console.error('Failed to seed Firestore:', err);
-          }
-        }, 2000);
+        console.log('✅ Connected to Firestore. Realtime listeners attached.');
 
       } catch (err) {
         console.error('Firestore connect failed:', err);
@@ -927,7 +939,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
           const idx = advances.findIndex(x => Number(x.id) === Number(id));
           if (idx >= 0) advances[idx] = data; else advances.push(data);
         }
-        try { renderDashboard(); renderEmployeeDetail(currentEmployee); renderDailyLabor(); renderSummary(); renderAdvances(); } catch(e){}
+        try { renderDashboard(); if(currentEmployee) renderEmployeeDetail(currentEmployee); renderDailyLabor(); renderSummary(); renderAdvances(); } catch(e){}
         return;
       }
       try {
@@ -988,7 +1000,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
     window.openDeleteAdvanceModal = function (advId) {
       if (!confirm('Delete this advance?')) return;
       if (hasFirebase && firebaseConnected) deleteDocSafe('advances', advId);
-      else { advances = advances.filter(a => Number(a.id) !== Number(advId)); renderAdvances(); showToast('Deleted (local)', 'success'); }
+      else { advances = advances.filter(a => Number(a.id) !== Number(advId)); renderAdvances(); renderDashboard(); showToast('Deleted (local)', 'success'); }
     };
 
     window.toggleStatusMenu = function (ev, attendanceId) {
@@ -1006,7 +1018,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
     if (monthInput) {
       monthInput.addEventListener('change', (e) => {
         selectedMonth = e.target.value;
-        try { renderDashboard(); if (currentEmployee) renderEmployeeDetail(currentEmployee); renderDailyLabor(); renderSummary(); } catch (err) {}
+        try { renderDashboard(); if (currentEmployee) renderEmployeeDetail(currentEmployee); renderDailyLabor(); renderSummary(); renderAdvances(); } catch (err) {}
       });
     }
 
