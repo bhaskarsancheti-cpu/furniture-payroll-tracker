@@ -21,6 +21,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
     let db = null;
     let dataSeeded = false;
 
+    // --- Database / initial data (unchanged except adding date_overrides array)
     let employees = [
       {
         id: 1,
@@ -40,7 +41,8 @@ if (window.__ATTENDANCE_APP_LOADED) {
           saturday: "off",
           sunday: "off"
         },
-        expected_monthly_hours: 192
+        expected_monthly_hours: 192,
+        date_overrides: [] // <-- new: per-date overrides
       },
       {
         id: 2,
@@ -60,7 +62,8 @@ if (window.__ATTENDANCE_APP_LOADED) {
           saturday: "off",
           sunday: "off"
         },
-        expected_monthly_hours: 192
+        expected_monthly_hours: 192,
+        date_overrides: []
       },
       {
         id: 3,
@@ -80,7 +83,8 @@ if (window.__ATTENDANCE_APP_LOADED) {
           saturday: "off",
           sunday: "off"
         },
-        expected_monthly_hours: 195
+        expected_monthly_hours: 195,
+        date_overrides: []
       },
       {
         id: 4,
@@ -90,7 +94,8 @@ if (window.__ATTENDANCE_APP_LOADED) {
         hire_date: "2025-01-01",
         status: "Active",
         phone: "",
-        salary_history: [{ date: "2025-01-01", salary: 0, reason: "Owner" }]
+        salary_history: [{ date: "2025-01-01", salary: 0, reason: "Owner" }],
+        date_overrides: []
       },
       {
         id: 5,
@@ -100,7 +105,8 @@ if (window.__ATTENDANCE_APP_LOADED) {
         hire_date: "2025-01-01",
         status: "Active",
         phone: "",
-        salary_history: [{ date: "2025-01-01", salary: 0, reason: "Owner" }]
+        salary_history: [{ date: "2025-01-01", salary: 0, reason: "Owner" }],
+        date_overrides: []
       }
     ];
 
@@ -126,6 +132,8 @@ if (window.__ATTENDANCE_APP_LOADED) {
     const INITIAL_EMPLOYEES = JSON.parse(JSON.stringify(employees));
     const INITIAL_ATTENDANCE = JSON.parse(JSON.stringify(attendanceLog));
 
+    // --- Helpers
+
     function getDayName(dateStr) {
       const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
       const date = new Date(dateStr + 'T00:00:00');
@@ -141,8 +149,23 @@ if (window.__ATTENDANCE_APP_LOADED) {
       return (endMinutes - startMinutes) / 60;
     }
 
+    // NEW: helper to find override for a date
+    function findDateOverride(employee, dateStr) {
+      if (!employee || !employee.date_overrides) return null;
+      return employee.date_overrides.find(o => o.date === dateStr) || null;
+    }
+
+    // Modified: check date overrides first, then regular schedule
     function getExpectedHours(employee, dateStr) {
-      if (!employee || !employee.schedule) return 0;
+      if (!employee) return 0;
+      const override = findDateOverride(employee, dateStr);
+      if (override) {
+        if (override.is_off) return 0;
+        if (override.override_schedule && typeof override.override_schedule.net_hours === 'number') {
+          return override.override_schedule.net_hours;
+        }
+      }
+      if (!employee.schedule) return 0;
       const dayName = getDayName(dateStr);
       const daySchedule = employee.schedule[dayName];
       if (!daySchedule || daySchedule === 'off') return 0;
@@ -150,7 +173,15 @@ if (window.__ATTENDANCE_APP_LOADED) {
     }
 
     function getBreakMinutes(employee, dateStr) {
-      if (!employee || !employee.schedule) return 30;
+      if (!employee) return 30;
+      const override = findDateOverride(employee, dateStr);
+      if (override) {
+        if (override.override_schedule && typeof override.override_schedule.break_mins === 'number') {
+          return override.override_schedule.break_mins;
+        }
+        if (override.is_off) return 0;
+      }
+      if (!employee.schedule) return 30;
       const dayName = getDayName(dateStr);
       const daySchedule = employee.schedule[dayName];
       if (!daySchedule || daySchedule === 'off') return 30;
@@ -183,6 +214,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
       }, 0);
     }
 
+    // calculateEmployeeStats unchanged logically — it uses attendance records' expected_hours.
     function calculateEmployeeStats(employee, month) {
       const monthAttendance = filterAttendanceByMonth(month).filter(entry => Number(entry.employee_id) === Number(employee.id));
       let actualHours = 0, overtimeHours = 0, absenceHours = 0, presentDays = 0, absentDays = 0;
@@ -211,25 +243,30 @@ if (window.__ATTENDANCE_APP_LOADED) {
       return { actualHours, overtimeHours, absenceHours, presentDays, absentDays, expectedHours, deductions, overtimePay, advanceDeduction, finalPay };
     }
 
+    // ---- Dashboard rendering: fix attendance rate & payroll aggregation to use hours correctly
     window.renderDashboard = function () {
       try {
         const salariedEmployees = employees.filter(e => (e.salary_monthly || 0) > 0 && e.status !== 'Inactive');
         const monthAttendance = filterAttendanceByMonth(selectedMonth);
         const monthLabor = filterLaborByMonth(selectedMonth);
 
-        let totalPayroll = 0, totalHours = 0, totalPresent = 0, totalExpected = 0;
+        let totalPayroll = 0, totalHours = 0, totalPresent = 0;
+        // **calculate totalExpectedHours correctly from employees' expected_monthly_hours**
+        let totalExpectedHours = 0;
+
         salariedEmployees.forEach(emp => {
           const stats = calculateEmployeeStats(emp, selectedMonth);
           totalPayroll += stats.finalPay;
           totalHours += stats.actualHours;
           totalPresent += stats.presentDays;
-          totalExpected += monthAttendance.filter(a => a.employee_id === emp.id).length;
+          totalExpectedHours += (emp.expected_monthly_hours || 0);
         });
 
         const laborCost = monthLabor.reduce((sum, labor) => sum + (labor.total_pay || 0), 0);
         totalPayroll += laborCost;
 
-        const attendanceRate = totalExpected > 0 ? Math.round((totalPresent / totalExpected) * 100) : 0;
+        // attendance rate = total actual hours / total expected hours (hours-based)
+        const attendanceRate = totalExpectedHours > 0 ? Math.round((totalHours / totalExpectedHours) * 100) : 0;
 
         document.getElementById('totalPayroll').textContent = formatCurrency(totalPayroll);
         document.getElementById('attendanceRate').textContent = attendanceRate + '%';
@@ -277,12 +314,12 @@ if (window.__ATTENDANCE_APP_LOADED) {
         const container = document.getElementById('employeeSelectCards');
         if (!container) return;
         const salariedEmployees = employees.filter(e => (e.salary_monthly || 0) > 0 && e.status !== 'Inactive');
-        
+
         if (salariedEmployees.length === 0) {
           container.innerHTML = '<p style="color:var(--muted);text-align:center">No employees found. Add employees first.</p>';
           return;
         }
-        
+
         container.innerHTML = salariedEmployees.map(emp => {
           const stats = calculateEmployeeStats(emp, selectedMonth);
           return `
@@ -310,14 +347,14 @@ if (window.__ATTENDANCE_APP_LOADED) {
       try {
         const container = document.getElementById('employeesManagementTable');
         if (!container) return;
-        
+
         const allEmployees = employees.filter(e => e.status !== 'Inactive');
-        
+
         if (allEmployees.length === 0) {
           container.innerHTML = '<p style="color:var(--muted);text-align:center">No employees found.</p>';
           return;
         }
-        
+
         const tableHTML = `
           <table>
             <thead>
@@ -381,10 +418,10 @@ if (window.__ATTENDANCE_APP_LOADED) {
     window.editEmployee = function(empId) {
       const emp = employees.find(e => Number(e.id) === Number(empId));
       if (!emp) return showToast('Employee not found', 'error');
-      
+
       const newSalary = prompt('Edit monthly salary for ' + emp.name, emp.salary_monthly);
       if (newSalary === null) return;
-      
+
       emp.salary_monthly = Number(newSalary);
       emp.salary_history = emp.salary_history || [];
       emp.salary_history.push({
@@ -392,7 +429,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
         salary: Number(newSalary),
         reason: 'Salary update'
       });
-      
+
       if (hasFirebase && firebaseConnected) {
         setDocSafe('employees', emp.id, emp);
       } else {
@@ -405,11 +442,11 @@ if (window.__ATTENDANCE_APP_LOADED) {
     window.deleteEmployee = function(empId) {
       const emp = employees.find(e => Number(e.id) === Number(empId));
       if (!emp) return showToast('Employee not found', 'error');
-      
+
       if (!confirm(`Delete employee ${emp.name}? This will mark them as inactive.`)) return;
-      
+
       emp.status = 'Inactive';
-      
+
       if (hasFirebase && firebaseConnected) {
         setDocSafe('employees', emp.id, emp);
       } else {
@@ -425,31 +462,31 @@ if (window.__ATTENDANCE_APP_LOADED) {
         console.warn('addEmployeeForm not found');
         return;
       }
-      
+
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        
+
         const name = document.getElementById('empName').value.trim();
         const role = document.getElementById('empRole').value.trim();
         const salary = parseFloat(document.getElementById('empSalary').value);
         const phone = document.getElementById('empPhone').value.trim();
         const hireDate = document.getElementById('empHireDate').value;
-        
+
         if (!name || !role || !salary || !hireDate) {
           showToast('Please fill all required fields', 'error');
           return;
         }
-        
+
         const schedule = {};
         const days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
         const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
         let totalMonthlyHours = 0;
-        
+
         days.forEach((day, idx) => {
           const start = document.getElementById(day + 'Start').value;
           const end = document.getElementById(day + 'End').value;
           const breakMins = parseInt(document.getElementById(day + 'Break').value) || 30;
-          
+
           if (start && end) {
             const totalHours = calculateTimeDiff(start, end);
             const netHours = Math.max(0, totalHours - (breakMins / 60));
@@ -464,7 +501,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
             schedule[dayNames[idx]] = 'off';
           }
         });
-        
+
         const id = nextEmployeeId++;
         const employee = {
           id,
@@ -476,9 +513,10 @@ if (window.__ATTENDANCE_APP_LOADED) {
           phone,
           salary_history: [{ date: hireDate, salary, reason: 'Initial hire' }],
           schedule,
-          expected_monthly_hours: Math.round(totalMonthlyHours)
+          expected_monthly_hours: Math.round(totalMonthlyHours),
+          date_overrides: []
         };
-        
+
         if (hasFirebase && firebaseConnected) {
           try {
             await db.collection('employees').doc(String(id)).set(employee);
@@ -494,17 +532,19 @@ if (window.__ATTENDANCE_APP_LOADED) {
           renderDashboard();
           showToast('Employee added (local)', 'success');
         }
-        
+
         form.reset();
         closeAddEmployeeModal();
       });
     })();
 
+    // --- Daily labor, advances, summary, etc. (unchanged except for being consistent with new helpers)
+
     window.renderDailyLabor = function () {
       try {
         const monthLabor = filterLaborByMonth(selectedMonth);
         const totalCost = monthLabor.reduce((sum, labor) => sum + (labor.total_pay || 0), 0);
-        
+
         const costEl = document.getElementById('totalLaborCost');
         if (costEl) costEl.textContent = formatCurrency(totalCost);
 
@@ -642,8 +682,14 @@ if (window.__ATTENDANCE_APP_LOADED) {
           const dayName = getDayName(dateStr);
           const attendance = attendanceLog.find(a => a.date === dateStr && Number(a.employee_id) === Number(employee.id));
           let className = 'calendar-day default';
-          if (employee.schedule && employee.schedule[dayName] === 'off') className = 'calendar-day weekend';
-          else if (attendance) {
+
+          // if override says off -> treat as weekend/off in calendar
+          const override = findDateOverride(employee, dateStr);
+          if (override && override.is_off) {
+            className = 'calendar-day weekend';
+          } else if (employee.schedule && employee.schedule[dayName] === 'off') {
+            className = 'calendar-day weekend';
+          } else if (attendance) {
             if (attendance.status === 'Present') className = attendance.overtime_hours > 0 ? 'calendar-day overtime' : 'calendar-day present';
             else if (attendance.status === 'Absent') className = 'calendar-day absent';
             else if (attendance.status === 'Leave' || attendance.status === 'Half-day') className = 'calendar-day leave';
@@ -661,9 +707,9 @@ if (window.__ATTENDANCE_APP_LOADED) {
         const container = document.getElementById('attendanceRecords');
         if (!container) return;
         const records = filterAttendanceByMonth(selectedMonth).filter(entry => Number(entry.employee_id) === Number(employee.id)).sort((a,b) => b.date.localeCompare(a.date));
-        if (!records || records.length === 0) { 
-          container.innerHTML = '<p style="color:var(--muted)">No attendance records for this month.</p>'; 
-          return; 
+        if (!records || records.length === 0) {
+          container.innerHTML = '<p style="color:var(--muted)">No attendance records for this month.</p>';
+          return;
         }
         container.innerHTML = records.map(record => {
           const modifiedBadge = record.last_modified ? `<span class="modified-badge">Modified ${record.last_modified.split('T')[0]}</span>` : '';
@@ -693,6 +739,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
       }
     };
 
+    // Attendance modal handlers (unchanged logic) -- computed values now use getExpectedHours/getBreakMinutes which check overrides
     function openAttendanceModal() {
       const modal = document.getElementById('attendanceModal');
       if (modal) modal.classList.add('active');
@@ -831,14 +878,14 @@ if (window.__ATTENDANCE_APP_LOADED) {
         const id = nextLaborId++;
         const entry = { id, date, name, wage, hours, total_pay: totalPay, notes, created_date: new Date().toISOString(), created_by: currentUser };
         if (hasFirebase && firebaseConnected) {
-          try { 
-            await db.collection('dailyLabor').doc(String(id)).set(entry); 
+          try {
+            await db.collection('dailyLabor').doc(String(id)).set(entry);
             showToast('Daily labor saved', 'success');
           }
-          catch (err) { 
-            console.error('dailyLabor write failed', err); 
-            showToast('Save failed', 'error'); 
-            return; 
+          catch (err) {
+            console.error('dailyLabor write failed', err);
+            showToast('Save failed', 'error');
+            return;
           }
         } else {
           dailyLaborers.push(entry);
@@ -866,13 +913,13 @@ if (window.__ATTENDANCE_APP_LOADED) {
         if (filterEmployeeId) filtered = filtered.filter(a => Number(a.employee_id) === Number(filterEmployeeId));
         if (filterStatus) filtered = filtered.filter(a => a.status === filterStatus);
         filtered.sort((a,b) => (b.date_given || '').localeCompare(a.date_given || ''));
-        
+
         const tbody = document.getElementById('advancesTableBody');
         if (!tbody) return;
-        
-        if (filtered.length === 0) { 
-          tbody.innerHTML = '<p style="color:var(--muted);text-align:center">No advances found.</p>'; 
-          return; 
+
+        if (filtered.length === 0) {
+          tbody.innerHTML = '<p style="color:var(--muted);text-align:center">No advances found.</p>';
+          return;
         }
 
         const tableHTML = `
@@ -951,14 +998,14 @@ if (window.__ATTENDANCE_APP_LOADED) {
         const id = nextAdvanceId++;
         const entry = { id, employee_id, amount, amount_deducted: 0, reason, date_given, status: 'Pending', created_by: currentUser };
         if (hasFirebase && firebaseConnected) {
-          try { 
-            await db.collection('advances').doc(String(id)).set(entry); 
+          try {
+            await db.collection('advances').doc(String(id)).set(entry);
             showToast('Advance saved', 'success');
           }
-          catch (err) { 
-            console.error('advance write failed', err); 
-            showToast('Save failed', 'error'); 
-            return; 
+          catch (err) {
+            console.error('advance write failed', err);
+            showToast('Save failed', 'error');
+            return;
           }
         } else {
           advances.push(entry);
@@ -1017,6 +1064,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
     }
     window.showToast = showToast;
 
+    // --- Firestore connection & sync (unchanged core logic)
     async function connectFirestore() {
       if (!hasFirebase) {
         console.warn('No firebaseConfig — running local-only.');
@@ -1030,36 +1078,38 @@ if (window.__ATTENDANCE_APP_LOADED) {
         firebaseConnected = true;
 
         const employeesSnapshot = await db.collection('employees').limit(1).get();
-        
+
         if (employeesSnapshot.empty && !dataSeeded) {
           console.log('🔄 Firestore is empty. Seeding now...');
           dataSeeded = true;
-          
+
           const batch = db.batch();
-          
+
           INITIAL_EMPLOYEES.forEach(emp => {
             const docRef = db.collection('employees').doc(String(emp.id));
             batch.set(docRef, emp);
           });
-          
+
           INITIAL_ATTENDANCE.forEach(att => {
             const docRef = db.collection('attendance').doc(String(att.id));
             batch.set(docRef, att);
           });
-          
+
           await batch.commit();
           console.log('✅ Firestore seeded successfully!');
           showToast('Database populated with sample data', 'success');
-          
+
           await new Promise(resolve => setTimeout(resolve, 500));
         }
 
         db.collection('employees').onSnapshot(snapshot => {
           const docs = [];
           snapshot.forEach(doc => docs.push({ id: (/^\d+$/.test(doc.id) ? Number(doc.id) : doc.id), ...doc.data() }));
-          
+
           if (docs.length > 0) {
             employees = docs.sort((a,b) => (Number(a.id||0) - Number(b.id||0)));
+            // ensure date_overrides array exists on each record (backwards compat)
+            employees.forEach(emp => { if (!Array.isArray(emp.date_overrides)) emp.date_overrides = []; });
             nextEmployeeId = (employees.reduce((m,e)=>Math.max(m,Number(e.id||0)),0) || 0) + 1;
             try { renderDashboard(); renderEmployeeSelect(); renderSummary(); renderEmployeeManagement(); } catch(e){}
           }
@@ -1215,6 +1265,31 @@ if (window.__ATTENDANCE_APP_LOADED) {
     } else {
       console.log('No Firebase config: running local-only.');
     }
+
+    // ---- NEW: API to manage date overrides on an employee
+    // setDateOverride(employeeId, dateStr, overrideObj)
+    // overrideObj can be: { is_off: true } or { override_schedule: { start:'08:30', end:'17:30', break_mins:30, net_hours:8 } }
+    window.setDateOverride = function(employeeId, dateStr, overrideObj) {
+      const emp = employees.find(e => Number(e.id) === Number(employeeId));
+      if (!emp) return console.error('Employee not found for override');
+      if (!Array.isArray(emp.date_overrides)) emp.date_overrides = [];
+      const idx = emp.date_overrides.findIndex(o => o.date === dateStr);
+      const newEntry = Object.assign({ date: dateStr }, overrideObj || {});
+      if (idx >= 0) emp.date_overrides[idx] = newEntry; else emp.date_overrides.push(newEntry);
+      // persist locally or to Firestore
+      if (hasFirebase && firebaseConnected) setDocSafe('employees', emp.id, emp);
+      else { renderDashboard(); if (currentEmployee && currentEmployee.id === emp.id) renderEmployeeDetail(emp); }
+      console.log('Date override set for', emp.name, dateStr, newEntry);
+    };
+
+    window.removeDateOverride = function(employeeId, dateStr) {
+      const emp = employees.find(e => Number(e.id) === Number(employeeId));
+      if (!emp || !Array.isArray(emp.date_overrides)) return;
+      emp.date_overrides = emp.date_overrides.filter(o => o.date !== dateStr);
+      if (hasFirebase && firebaseConnected) setDocSafe('employees', emp.id, emp);
+      else { renderDashboard(); if (currentEmployee && currentEmployee.id === emp.id) renderEmployeeDetail(emp); }
+      console.log('Date override removed for', emp.name, dateStr);
+    };
 
     window._APP = {
       get employees() { return employees; },
