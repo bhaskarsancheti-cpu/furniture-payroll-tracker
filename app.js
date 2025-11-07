@@ -1,4 +1,4 @@
-// app.js — Attendance & Payroll Tracker (fixed payroll + fixed overrides modal bug)
+// app.js — Attendance & Payroll Tracker (payroll math tightened, caps applied)
 if (window.__ATTENDANCE_APP_LOADED) {
   console.log('Attendance app already loaded — skipping duplicate initialization.');
 } else {
@@ -200,7 +200,8 @@ if (window.__ATTENDANCE_APP_LOADED) {
     }
 
     function formatCurrency(amount) {
-      return '₹' + Math.round((amount || 0)).toLocaleString('en-IN');
+      const n = Number(amount || 0);
+      return '₹' + Math.round(n).toLocaleString('en-IN');
     }
 
     function formatDate(dateStr) {
@@ -212,14 +213,14 @@ if (window.__ATTENDANCE_APP_LOADED) {
     function calculateAdvanceDeduction(employeeId) {
       const pendingAdvances = advances.filter(adv => Number(adv.employee_id) === Number(employeeId) && (adv.status === 'Pending' || adv.status === 'Partial'));
       return pendingAdvances.reduce((sum, adv) => {
-        const remaining = (adv.amount || 0) - (adv.amount_deducted || 0);
-        return sum + remaining;
+        const remaining = (Number(adv.amount || 0) - Number(adv.amount_deducted || 0));
+        return sum + Math.max(0, remaining);
       }, 0);
     }
 
     // Normalize entry
     function normalizeAttendanceEntry(entry, employee) {
-      const expected = (entry && (entry.expected_hours || getExpectedHours(employee, entry.date))) || 0;
+      const expected = (entry && (Number(entry.expected_hours || 0) || getExpectedHours(employee, entry.date))) || 0;
       const rawStatus = (entry && (entry.status || 'Present')) || 'Present';
       const status = String(rawStatus).trim();
       let net = Number(entry && (entry.net_hours || 0)) || 0;
@@ -241,94 +242,104 @@ if (window.__ATTENDANCE_APP_LOADED) {
       };
     }
 
-    // ---------- FIXED: compute payroll using day-by-day expected hours (respects overrides & hire_date)
-    // Replaced previous version to prevent basePay inflation when expectedHours > expected_monthly_hours
+    // ---------- PAYROLL (fixed, with caps and defensive numeric handling) ----------
     function computePayrollForEmployee(employee, month) {
-      employee = employee || {};
-      // month is 'YYYY-MM'
+      // defensive
+      if (!employee) return {
+        expectedHours: 0, workedHours: 0, overtimeHours: 0, absenceHours: 0,
+        absenceDeduction: 0, overtimePay: 0, basePay: 0, hourlyRate: 0, advanceDeduction: 0, finalPay: 0
+      };
 
-      // build list of dates in the month
-      const [yStr, mStr] = (month || new Date().toISOString().slice(0,7)).split('-');
-      const y = Number(yStr);
-      const m = Number(mStr);
-      const monthStart = new Date(y, m - 1, 1);
-      const monthEnd = new Date(y, m, 0);
-      const daysInMonth = monthEnd.getDate();
-
-      // accumulate expected hours per day (respecting overrides and hire date)
-      let expectedHours = 0;
-      for (let d = 1; d <= daysInMonth; d++) {
-        const dateStr = `${yStr}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-        // skip days before hire
-        if (employee.hire_date) {
-          const hire = new Date(employee.hire_date + 'T00:00:00');
-          const thisDate = new Date(dateStr + 'T00:00:00');
-          if (thisDate < hire) continue; // employee not yet hired
-        }
-        expectedHours += getExpectedHours(employee, dateStr);
+      // prepare month bounds
+      const m = (month || new Date().toISOString().slice(0,7)).split('-');
+      const yearNum = Number(m[0]);
+      const monthNum = Number(m[1]);
+      if (isNaN(yearNum) || isNaN(monthNum)) {
+        // fallback
+        month = new Date().toISOString().slice(0,7);
       }
 
-      // gather attendance in month
-      const monthAttendance = attendanceLog.filter(a => a.date && a.date.startsWith(month) && Number(a.employee_id) === Number(employee.id));
+      const [yStr, mStr] = (month || new Date().toISOString().slice(0,7)).split('-');
+      const y = Number(yStr);
+      const mo = Number(mStr);
+      const lastDay = new Date(y, mo, 0).getDate();
+
+      // compute expected hours day-by-day (respect overrides and hire date)
+      let expectedHours = 0;
+      for (let d = 1; d <= lastDay; d++) {
+        const dd = String(d).padStart(2,'0');
+        const dateStr = `${yStr}-${String(mo).padStart(2,'0')}-${dd}`;
+        if (employee.hire_date) {
+          const hireDate = new Date(employee.hire_date + 'T00:00:00');
+          const thisDate = new Date(dateStr + 'T00:00:00');
+          if (thisDate < hireDate) continue;
+        }
+        expectedHours += Number(getExpectedHours(employee, dateStr) || 0);
+      }
+
+      // gather attendance entries and compute worked/overtime
+      const monthAttendance = attendanceLog.filter(a => a.date && a.date.startsWith((month || (new Date().toISOString().slice(0,7)))) && Number(a.employee_id) === Number(employee.id));
       let workedHours = 0;
       let overtimeHours = 0;
-      let absentDays = 0;
-      let leaveDays = 0;
       monthAttendance.forEach(entry => {
         const norm = normalizeAttendanceEntry(entry, employee);
-        workedHours += norm.net_hours;
-        if (norm.net_hours > (norm.expected_hours || 0)) overtimeHours += (norm.net_hours - (norm.expected_hours || 0));
-        if (norm.status === 'Absent') absentDays++;
-        if (norm.status === 'Leave') leaveDays++;
+        workedHours += Number(norm.net_hours || 0);
+        const extra = (Number(norm.net_hours || 0) - Number(norm.expected_hours || 0));
+        if (extra > 0) overtimeHours += extra;
       });
 
-      // basePay logic:
-      // - If expectedHours is 0 -> basePay 0
-      // - If expectedHours < employee.expected_monthly_hours -> prorate salary down for partial month
-      // - If expectedHours >= employee.expected_monthly_hours -> DO NOT increase salary; keep basePay = salary
+      // base pay: if expectedHours is 0 -> 0. If expectedHours < expected_monthly_hours -> prorate down.
+      // If expectedHours >= expected_monthly_hours -> do NOT inflate salary (cap at monthly salary).
       const monthlySalary = Number(employee.salary_monthly || 0);
       let basePay = 0;
+      const baseline = Number(employee.expected_monthly_hours || 0);
+
       if (expectedHours <= 0) {
         basePay = 0;
-      } else if (employee.expected_monthly_hours && employee.expected_monthly_hours > 0) {
-        const ratio = expectedHours / employee.expected_monthly_hours;
-        // Cap ratio at 1.0 — never increase salary beyond the nominal monthly salary
-        const effectiveRatio = Math.min(1, ratio);
+      } else if (baseline > 0) {
+        const ratio = expectedHours / baseline;
+        const effectiveRatio = Math.min(1, ratio); // never increase
         basePay = Math.round(monthlySalary * effectiveRatio);
       } else {
-        // no baseline expected_monthly_hours — fall back to full salary
         basePay = monthlySalary;
       }
 
-      // hourly rate is derived from the basePay and the expected hours for the month
+      // hourly rate: derived from basePay and expectedHours for that month
       let hourlyRate = 0;
       if (expectedHours > 0) hourlyRate = basePay / expectedHours;
-      else hourlyRate = 0;
+      hourlyRate = Number(hourlyRate || 0);
 
+      // absence hours and deduction: cap deduction to basePay (can't deduct more than pay)
       const absenceHours = Math.max(0, expectedHours - workedHours);
-      const absenceDeduction = Math.round(absenceHours * hourlyRate);
-      const overtimePay = Math.round(overtimeHours * hourlyRate * 1.5);
-      const advanceDeduction = Math.round(calculateAdvanceDeduction(employee.id) || 0);
+      let absenceDeduction = Math.round(absenceHours * hourlyRate);
+      if (absenceDeduction > basePay) absenceDeduction = basePay;
 
+      // overtime pay: 1.5x on hourlyRate
+      let overtimePay = Math.round(overtimeHours * hourlyRate * 1.5);
+
+      // advances
+      const advanceDeduction = Math.round(Number(calculateAdvanceDeduction(employee.id) || 0));
+
+      // final pay can be negative (if advances > pay) — that's acceptable, but keep numeric rounding
       const finalPay = Math.round(basePay - absenceDeduction + overtimePay - advanceDeduction);
 
       return {
-        expectedHours,
-        workedHours,
-        overtimeHours,
-        absenceHours,
-        absenceDeduction,
-        overtimePay,
-        basePay,
-        hourlyRate,
-        advanceDeduction,
-        finalPay
+        expectedHours: Number(expectedHours),
+        workedHours: Number(workedHours),
+        overtimeHours: Number(overtimeHours),
+        absenceHours: Number(absenceHours),
+        absenceDeduction: Number(absenceDeduction),
+        overtimePay: Number(overtimePay),
+        basePay: Number(basePay),
+        hourlyRate: Number(hourlyRate),
+        advanceDeduction: Number(advanceDeduction),
+        finalPay: Number(finalPay)
       };
     }
 
     function calculateEmployeeStats(employee, month) {
       const p = computePayrollForEmployee(employee, month);
-      const stats = {
+      return {
         actualHours: p.workedHours || 0,
         overtimeHours: p.overtimeHours || 0,
         absenceHours: p.absenceHours || 0,
@@ -340,13 +351,12 @@ if (window.__ATTENDANCE_APP_LOADED) {
         advanceDeduction: p.advanceDeduction || 0,
         finalPay: p.finalPay || 0
       };
-      return stats;
     }
 
     // ---------- RENDERING ----------
     window.renderDashboard = function () {
       try {
-        const salariedEmployees = employees.filter(e => (e.salary_monthly || 0) > 0 && e.status !== 'Inactive');
+        const salariedEmployees = employees.filter(e => (Number(e.salary_monthly || 0)) > 0 && e.status !== 'Inactive');
         const monthLabor = filterLaborByMonth(selectedMonth);
 
         let totalPayroll = 0;
@@ -360,7 +370,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
           totalExpectedHours += Number(stats.expectedHours || 0);
         });
 
-        const laborCost = monthLabor.reduce((sum, labor) => sum + (labor.total_pay || 0), 0);
+        const laborCost = monthLabor.reduce((sum, labor) => sum + Number(labor.total_pay || 0), 0);
         totalPayroll += laborCost;
 
         const attendanceRate = totalExpectedHours > 0 ? Math.round((totalActualHours / totalExpectedHours) * 100) : 0;
@@ -384,7 +394,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
       try {
         const container = document.getElementById('employeeCards');
         if (!container) return;
-        const salariedEmployees = employees.filter(e => (e.salary_monthly || 0) > 0 && e.status !== 'Inactive');
+        const salariedEmployees = employees.filter(e => (Number(e.salary_monthly || 0)) > 0 && e.status !== 'Inactive');
         container.innerHTML = salariedEmployees.map(emp => {
           const stats = calculateEmployeeStats(emp, selectedMonth);
           return `
@@ -414,7 +424,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
       try {
         const container = document.getElementById('employeeSelectCards');
         if (!container) return;
-        const salariedEmployees = employees.filter(e => (e.salary_monthly || 0) > 0 && e.status !== 'Inactive');
+        const salariedEmployees = employees.filter(e => (Number(e.salary_monthly || 0)) > 0 && e.status !== 'Inactive');
 
         if (salariedEmployees.length === 0) {
           container.innerHTML = '<p style="color:var(--muted);text-align:center">No employees found. Add employees first.</p>';
@@ -637,11 +647,11 @@ if (window.__ATTENDANCE_APP_LOADED) {
       });
     })();
 
-    // --- Daily labor, attendance, advances, summary (kept behavior)
+    // --- Daily labor, attendance, advances, summary (kept behavior) ---
     window.renderDailyLabor = function () {
       try {
         const monthLabor = filterLaborByMonth(selectedMonth);
-        const totalCost = monthLabor.reduce((sum, labor) => sum + (labor.total_pay || 0), 0);
+        const totalCost = monthLabor.reduce((sum, labor) => sum + Number(labor.total_pay || 0), 0);
 
         const costEl = document.getElementById('totalLaborCost');
         if (costEl) costEl.textContent = formatCurrency(totalCost);
@@ -754,7 +764,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
           <div class="payroll-row"><span>Actual Hours Worked</span><span>${Math.round(stats.actualHours)} hrs</span></div>
           <div class="payroll-row"><span>Absence Hours</span><span>${Math.round(stats.absenceHours)} hrs</span></div>
           <div class="payroll-row"><span>Overtime Hours</span><span>${Math.round(stats.overtimeHours)} hrs</span></div>
-          <div class="payroll-row"><span>Absence Deductions</span><span>-${formatCurrency(stats.deductions)}</span></div>
+          <div class="payroll-row"><span>Absence Deductions (-)</span><span>${formatCurrency(stats.deductions)}</span></div>
           <div class="payroll-row"><span>Overtime Pay (1.5x)</span><span>+${formatCurrency(stats.overtimePay)}</span></div>
           <div class="payroll-row"><span><strong>Final Pay</strong></span><span><strong>${formatCurrency(stats.finalPay)}</strong></span></div>
         `;
@@ -790,9 +800,9 @@ if (window.__ATTENDANCE_APP_LOADED) {
           } else if (employee.schedule && employee.schedule[dayName] === 'off') {
             className = 'calendar-day weekend';
           } else if (attendance) {
-            if (attendance.status === 'Present') className = attendance.overtime_hours > 0 ? 'calendar-day overtime' : 'calendar-day present';
-            else if (attendance.status === 'Absent') className = 'calendar-day absent';
-            else if (attendance.status === 'Leave' || attendance.status === 'Half-day') className = 'calendar-day leave';
+            if ((attendance.status || '').toLowerCase() === 'present') className = (Number(attendance.overtime_hours || 0) > 0) ? 'calendar-day overtime' : 'calendar-day present';
+            else if ((attendance.status || '').toLowerCase() === 'absent') className = 'calendar-day absent';
+            else if ((attendance.status || '').toLowerCase() === 'leave' || (attendance.status || '').toLowerCase() === 'half-day') className = 'calendar-day leave';
           }
           calendarHTML += `<div class="${className}">${day}</div>`;
         }
@@ -1005,7 +1015,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
     window.renderAdvances = function () {
       try {
         const empFilter = document.getElementById('advanceFilterEmployee');
-        if (empFilter) empFilter.innerHTML = '<option value="">All Employees</option>' + employees.filter(e => (e.salary_monthly || 0) > 0).map(emp => `<option value="${emp.id}">${emp.name}</option>`).join('');
+        if (empFilter) empFilter.innerHTML = '<option value="">All Employees</option>' + employees.filter(e => (Number(e.salary_monthly || 0)) > 0).map(emp => `<option value="${emp.id}">${emp.name}</option>`).join('');
 
         const filterEmployeeId = empFilter ? empFilter.value : '';
         const filterStatus = (document.getElementById('advanceFilterStatus') && document.getElementById('advanceFilterStatus').value) || '';
@@ -1041,8 +1051,8 @@ if (window.__ATTENDANCE_APP_LOADED) {
               ${filtered.map(adv => {
                 const employee = employees.find(e => Number(e.id) === Number(adv.employee_id));
                 const employeeName = employee ? employee.name : 'Unknown';
-                const deducted = adv.amount_deducted || 0;
-                const balance = (adv.amount || 0) - deducted;
+                const deducted = Number(adv.amount_deducted || 0);
+                const balance = Number(adv.amount || 0) - deducted;
                 const daysPending = Math.floor((new Date() - new Date(adv.date_given)) / (1000*60*60*24));
                 let statusClass = 'status-badge';
                 if (adv.status === 'Pending') statusClass += ' status-leave';
@@ -1080,7 +1090,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
       const modal = document.getElementById('addAdvanceModal');
       if (modal) modal.classList.add('active');
       const empSelect = document.getElementById('advanceEmployee');
-      if (empSelect) empSelect.innerHTML = '<option value="">Select Employee</option>' + employees.filter(e => (e.salary_monthly || 0) > 0).map(emp => `<option value="${emp.id}">${emp.name}</option>`).join('');
+      if (empSelect) empSelect.innerHTML = '<option value="">Select Employee</option>' + employees.filter(e => (Number(e.salary_monthly || 0)) > 0).map(emp => `<option value="${emp.id}">${emp.name}</option>`).join('');
       const ad = document.getElementById('advanceDate');
       if (ad) ad.value = new Date().toISOString().split('T')[0];
     };
@@ -1122,16 +1132,16 @@ if (window.__ATTENDANCE_APP_LOADED) {
       try {
         const tbody = document.getElementById('summaryTableBody');
         if (!tbody) return;
-        const salariedEmployees = employees.filter(e => (e.salary_monthly || 0) > 0);
+        const salariedEmployees = employees.filter(e => (Number(e.salary_monthly || 0)) > 0);
         const rows = salariedEmployees.map(emp => {
           const s = calculateEmployeeStats(emp, selectedMonth);
           return `<tr><td><strong>${emp.name}</strong></td><td>${emp.role}</td><td>${s.expectedHours} hrs</td><td>${Math.round(s.actualHours)} hrs</td><td>${formatCurrency(emp.salary_monthly||0)}</td><td>${formatCurrency(s.deductions)}</td><td>${formatCurrency(s.overtimePay)}</td><td><strong>${formatCurrency(s.finalPay)}</strong></td></tr>`;
         });
         const monthLabor = dailyLaborers.filter(l => l.date && l.date.startsWith(selectedMonth));
-        const laborCost = monthLabor.reduce((s,l)=>s+(l.total_pay||0),0);
-        const laborHours = monthLabor.reduce((s,l)=>s+(l.hours||0),0);
+        const laborCost = monthLabor.reduce((s,l)=>s+(Number(l.total_pay||0)),0);
+        const laborHours = monthLabor.reduce((s,l)=>s+(Number(l.hours||0)),0);
         if (monthLabor.length > 0) rows.push(`<tr style="background:#f5f5f5;"><td><strong>Daily Laborers</strong></td><td>Various</td><td>-</td><td>${Math.round(laborHours)} hrs</td><td>-</td><td>-</td><td>-</td><td><strong>${formatCurrency(laborCost)}</strong></td></tr>`);
-        const totalPayroll = employees.filter(e => (e.salary_monthly||0)>0).reduce((s,emp)=>s+calculateEmployeeStats(emp, selectedMonth).finalPay,0) + laborCost;
+        const totalPayroll = employees.filter(e => (Number(e.salary_monthly||0))>0).reduce((s,emp)=>s+Number(calculateEmployeeStats(emp, selectedMonth).finalPay),0) + laborCost;
         rows.push(`<tr style="background:var(--accent);color:#fff;font-weight:bold;"><td colspan="7" style="text-align:right;"><strong>TOTAL PAYROLL</strong></td><td><strong>${formatCurrency(totalPayroll)}</strong></td></tr>`);
         tbody.innerHTML = rows.join('');
       } catch (err) {
@@ -1157,7 +1167,6 @@ if (window.__ATTENDANCE_APP_LOADED) {
     function showToast(msg, type = 'success') {
       const t = document.querySelector('.toast');
       if (!t) {
-        // fallback alert for debugging if toast missing
         console.log(type.toUpperCase() + ': ' + msg);
         return;
       }
@@ -1370,7 +1379,6 @@ if (window.__ATTENDANCE_APP_LOADED) {
     }
 
     // ---------- DATE OVERRIDE APIs ----------
-    // setDateOverride now updates local state immediately and persists
     window.setDateOverride = function(employeeId, dateStr, overrideObj) {
       const emp = employees.find(e => Number(e.id) === Number(employeeId));
       if (!emp) return console.error('Employee not found for override');
@@ -1379,11 +1387,8 @@ if (window.__ATTENDANCE_APP_LOADED) {
       const newEntry = Object.assign({ date: dateStr }, overrideObj || {});
       if (idx >= 0) emp.date_overrides[idx] = newEntry; else emp.date_overrides.push(newEntry);
 
-      // immediate UI refresh
       try { renderDashboard(); if (currentEmployee && currentEmployee.id === emp.id) renderEmployeeDetail(emp); } catch(e){}
-      // persist
       if (hasFirebase && firebaseConnected) setDocSafe('employees', emp.id, emp);
-
       console.log('Date override set for', emp.name, dateStr, newEntry);
     };
 
@@ -1392,14 +1397,12 @@ if (window.__ATTENDANCE_APP_LOADED) {
       if (!emp || !Array.isArray(emp.date_overrides)) return;
       emp.date_overrides = emp.date_overrides.filter(o => o.date !== dateStr);
 
-      // immediate UI refresh
       try { renderDashboard(); if (currentEmployee && currentEmployee.id === emp.id) renderEmployeeDetail(emp); } catch(e){}
-      // persist
       if (hasFirebase && firebaseConnected) setDocSafe('employees', emp.id, emp);
       console.log('Date override removed for', emp.name, dateStr);
     };
 
-    // ---------- Override modal (fixed handler bug) ----------
+    // ---------- Override modal ----------
     window.openOverrideModal = function(employeeId) {
       const emp = employees.find(e => Number(e.id) === Number(employeeId));
       if (!emp) return showToast('Employee not found', 'error');
@@ -1467,7 +1470,6 @@ if (window.__ATTENDANCE_APP_LOADED) {
           document.getElementById('overrideWorkInputs').style.display = (v === 'work') ? 'flex' : 'none';
         });
 
-        // IMPORTANT FIX: handler reads employeeId from modal.dataset each time it's clicked (no closure)
         document.getElementById('overrideAddBtn').addEventListener('click', () => {
           const modalEl = document.getElementById('overrideModal');
           const empId = Number(modalEl.dataset.currentEmployeeId);
@@ -1490,7 +1492,6 @@ if (window.__ATTENDANCE_APP_LOADED) {
         });
       }
 
-      // show modal and set current employee id on modal dataset
       modal.style.display = 'flex';
       modal.dataset.currentEmployeeId = String(employeeId);
       document.getElementById('overrideModalTitle').textContent = `Manage Overrides — ${emp.name}`;
@@ -1522,7 +1523,6 @@ if (window.__ATTENDANCE_APP_LOADED) {
         </div>`;
       }).join('');
 
-      // attach listeners to remove buttons (delegation replacement for inline onclick)
       Array.from(listEl.querySelectorAll('.override-remove-btn')).forEach(btn => {
         btn.onclick = function() {
           const empId = Number(this.getAttribute('data-emp'));
