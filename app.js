@@ -1,4 +1,4 @@
-// app.js — Attendance & Payroll Tracker
+// app.js — Attendance & Payroll Tracker (with date-overrides UI + Firestore persistence)
 if (window.__ATTENDANCE_APP_LOADED) {
   console.log('Attendance app already loaded — skipping duplicate initialization.');
 } else {
@@ -21,7 +21,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
     let db = null;
     let dataSeeded = false;
 
-    // --- Database / initial data (unchanged except adding date_overrides array)
+    // ---------- initial data (unchanged) ----------
     let employees = [
       {
         id: 1,
@@ -42,7 +42,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
           sunday: "off"
         },
         expected_monthly_hours: 192,
-        date_overrides: [] // <-- new: per-date overrides
+        date_overrides: []
       },
       {
         id: 2,
@@ -132,8 +132,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
     const INITIAL_EMPLOYEES = JSON.parse(JSON.stringify(employees));
     const INITIAL_ATTENDANCE = JSON.parse(JSON.stringify(attendanceLog));
 
-    // --- Helpers
-
+    // ---------- Utility functions ----------
     function getDayName(dateStr) {
       const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
       const date = new Date(dateStr + 'T00:00:00');
@@ -149,13 +148,13 @@ if (window.__ATTENDANCE_APP_LOADED) {
       return (endMinutes - startMinutes) / 60;
     }
 
-    // NEW: helper to find override for a date
+    // find override object by date on an employee
     function findDateOverride(employee, dateStr) {
-      if (!employee || !employee.date_overrides) return null;
+      if (!employee || !Array.isArray(employee.date_overrides)) return null;
       return employee.date_overrides.find(o => o.date === dateStr) || null;
     }
 
-    // Modified: check date overrides first, then regular schedule
+    // expected hours: check override first, then weekly schedule
     function getExpectedHours(employee, dateStr) {
       if (!employee) return 0;
       const override = findDateOverride(employee, dateStr);
@@ -163,6 +162,12 @@ if (window.__ATTENDANCE_APP_LOADED) {
         if (override.is_off) return 0;
         if (override.override_schedule && typeof override.override_schedule.net_hours === 'number') {
           return override.override_schedule.net_hours;
+        }
+        // if override has start/end compute net
+        if (override.override_schedule && override.override_schedule.start && override.override_schedule.end) {
+          const tot = calculateTimeDiff(override.override_schedule.start, override.override_schedule.end);
+          const br = override.override_schedule.break_mins || 30;
+          return Math.max(0, tot - (br / 60));
         }
       }
       if (!employee.schedule) return 0;
@@ -172,6 +177,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
       return daySchedule.net_hours || 0;
     }
 
+    // break minutes: check override first
     function getBreakMinutes(employee, dateStr) {
       if (!employee) return 30;
       const override = findDateOverride(employee, dateStr);
@@ -214,64 +220,172 @@ if (window.__ATTENDANCE_APP_LOADED) {
       }, 0);
     }
 
-    // calculateEmployeeStats unchanged logically — it uses attendance records' expected_hours.
-    function calculateEmployeeStats(employee, month) {
-      const monthAttendance = filterAttendanceByMonth(month).filter(entry => Number(entry.employee_id) === Number(employee.id));
-      let actualHours = 0, overtimeHours = 0, absenceHours = 0, presentDays = 0, absentDays = 0;
+    // normalize attendance entries (deterministic)
+    function normalizeAttendanceEntry(entry, employee) {
+      const expected = (entry && (entry.expected_hours || getExpectedHours(employee, entry.date))) || 0;
+      const rawStatus = (entry && (entry.status || 'Present')) || 'Present';
+      const status = String(rawStatus).trim();
+      let net = Number(entry && (entry.net_hours || 0)) || 0;
+
+      if (status === 'Present') {
+        if (net <= 0) net = expected;
+      } else if (status === 'Half-day') {
+        if (net <= 0) net = parseFloat((expected * 0.5).toFixed(2));
+      } else if (status === 'Leave' || status === 'Absent') {
+        net = 0;
+      } else {
+        if (net <= 0) net = expected;
+      }
+
+      return {
+        net_hours: parseFloat(net.toFixed(2)),
+        status,
+        expected_hours: expected
+      };
+    }
+
+    // compute payroll — pro-rata consistent (keeps earlier logic)
+    function computePayrollForEmployee(employee, month) {
+      employee = employee || {};
+      const fullMonthExpected = employee.expected_monthly_hours || 0;
+      const monthAttendance = attendanceLog.filter(a => a.date && a.date.startsWith(month) && Number(a.employee_id) === Number(employee.id));
+
+      let workedHours = 0;
+      let overtimeHours = 0;
+      let halfDayCount = 0;
+      let absentCount = 0;
+      let leaveCount = 0;
+      const notes = [];
 
       monthAttendance.forEach(entry => {
-        if (entry.status === 'Present' || entry.status === 'Half-day') {
-          actualHours += (entry.net_hours || 0);
-          presentDays++;
-          if ((entry.net_hours || 0) > (entry.expected_hours || 0)) {
-            overtimeHours += ((entry.net_hours || 0) - (entry.expected_hours || 0));
-          }
-        } else if (entry.status === 'Absent' || entry.status === 'Leave') {
-          absenceHours += (entry.expected_hours || 0);
-          absentDays++;
+        const norm = normalizeAttendanceEntry(entry, employee);
+        const net = norm.net_hours;
+        const expected = norm.expected_hours || 0;
+        const status = norm.status;
+
+        if (status === 'Present') {
+          workedHours += net;
+          if (net > expected) overtimeHours += Math.max(0, net - expected);
+        } else if (status === 'Half-day') {
+          halfDayCount += 1;
+          workedHours += net;
+          if (net > expected) overtimeHours += Math.max(0, net - expected);
+        } else if (status === 'Leave') {
+          leaveCount += 1;
+          notes.push(`Leave on ${entry.date}`);
+        } else if (status === 'Absent') {
+          absentCount += 1;
+          notes.push(`Absent on ${entry.date}`);
+        } else {
+          workedHours += net;
+          if (net > expected) overtimeHours += Math.max(0, net - expected);
         }
       });
 
-      const expectedHours = employee.expected_monthly_hours || 0;
-      const hourlyRate = expectedHours > 0 ? (employee.salary_monthly || 0) / expectedHours : 0;
-      const deductions = absenceHours * hourlyRate;
-      const overtimePay = overtimeHours * hourlyRate * 1.5;
-      const advanceDeduction = calculateAdvanceDeduction(employee.id);
+      // pro-rata factor for hires
+      let proRataFactor = 1;
+      if (employee.hire_date) {
+        try {
+          const hire = new Date(employee.hire_date + 'T00:00:00');
+          const [y, m] = month.split('-').map(Number);
+          const monthStart = new Date(y, m - 1, 1);
+          const monthEnd = new Date(y, m, 0);
+          if (hire > monthStart && hire <= monthEnd) {
+            const daysInMonth = monthEnd.getDate();
+            const workedDays = daysInMonth - hire.getDate() + 1;
+            proRataFactor = (workedDays / daysInMonth);
+            notes.push(`Pro-rata applied (${workedDays}/${daysInMonth})`);
+          } else if (hire > monthEnd) {
+            proRataFactor = 0;
+            notes.push(`Hired after month`);
+          }
+        } catch (e) {}
+      }
 
-      const finalPay = (employee.salary_monthly || 0) - deductions + overtimePay - advanceDeduction;
+      const basePay = Math.round((employee.salary_monthly || 0) * proRataFactor);
+      const proRatedExpectedHours = Math.round((fullMonthExpected || 0) * proRataFactor * 100) / 100;
 
-      return { actualHours, overtimeHours, absenceHours, presentDays, absentDays, expectedHours, deductions, overtimePay, advanceDeduction, finalPay };
+      let hourlyRate = 0;
+      if (proRatedExpectedHours > 0) hourlyRate = basePay / proRatedExpectedHours;
+      else hourlyRate = (fullMonthExpected > 0) ? ((employee.salary_monthly || 0) / fullMonthExpected) : 0;
+
+      const absenceHours = Math.max(0, proRatedExpectedHours - workedHours);
+      const absenceDeduction = Math.round(absenceHours * hourlyRate);
+      const overtimePay = Math.round(overtimeHours * hourlyRate * 1.5);
+
+      const advanceDeduction = Math.round((advances || []).filter(a => Number(a.employee_id) === Number(employee.id) && (a.status === 'Pending' || a.status === 'Partial')).reduce((s, a) => {
+        const remaining = (a.amount || 0) - (a.amount_deducted || 0);
+        return s + Math.max(0, remaining);
+      }, 0));
+
+      const finalPay = Math.round(basePay - absenceDeduction + overtimePay - advanceDeduction);
+
+      return {
+        expectedHours: proRatedExpectedHours,
+        workedHours,
+        halfDayCount,
+        absentCount,
+        leaveCount,
+        absenceHours,
+        overtimeHours,
+        hourlyRate,
+        absenceDeduction,
+        overtimePay,
+        proRataFactor,
+        basePay,
+        advanceDeduction,
+        finalPay,
+        notes
+      };
     }
 
-    // ---- Dashboard rendering: fix attendance rate & payroll aggregation to use hours correctly
+    function calculateEmployeeStats(employee, month) {
+      // use computePayrollForEmployee where possible
+      const p = computePayrollForEmployee(employee, month);
+      return {
+        actualHours: p.workedHours,
+        overtimeHours: p.overtimeHours,
+        absenceHours: p.absenceHours,
+        presentDays: filterAttendanceByMonth(month).filter(entry => Number(entry.employee_id) === Number(employee.id) && ((entry.status || '').toLowerCase() === 'present' || (entry.status || '').toLowerCase() === 'half-day')).length,
+        absentDays: filterAttendanceByMonth(month).filter(entry => Number(entry.employee_id) === Number(employee.id) && ((entry.status || '').toLowerCase() === 'absent' || (entry.status || '').toLowerCase() === 'leave')).length,
+        expectedHours: p.expectedHours,
+        deductions: p.absenceDeduction,
+        overtimePay: p.overtimePay,
+        advanceDeduction: p.advanceDeduction,
+        finalPay: p.finalPay
+      };
+    }
+
+    // ---------- Rendering and UI (most functions kept as before) ----------
     window.renderDashboard = function () {
       try {
         const salariedEmployees = employees.filter(e => (e.salary_monthly || 0) > 0 && e.status !== 'Inactive');
         const monthAttendance = filterAttendanceByMonth(selectedMonth);
         const monthLabor = filterLaborByMonth(selectedMonth);
 
-        let totalPayroll = 0, totalHours = 0, totalPresent = 0;
-        // **calculate totalExpectedHours correctly from employees' expected_monthly_hours**
+        let totalPayroll = 0, totalHours = 0;
         let totalExpectedHours = 0;
 
         salariedEmployees.forEach(emp => {
           const stats = calculateEmployeeStats(emp, selectedMonth);
           totalPayroll += stats.finalPay;
           totalHours += stats.actualHours;
-          totalPresent += stats.presentDays;
           totalExpectedHours += (emp.expected_monthly_hours || 0);
         });
 
         const laborCost = monthLabor.reduce((sum, labor) => sum + (labor.total_pay || 0), 0);
         totalPayroll += laborCost;
 
-        // attendance rate = total actual hours / total expected hours (hours-based)
         const attendanceRate = totalExpectedHours > 0 ? Math.round((totalHours / totalExpectedHours) * 100) : 0;
 
-        document.getElementById('totalPayroll').textContent = formatCurrency(totalPayroll);
-        document.getElementById('attendanceRate').textContent = attendanceRate + '%';
-        document.getElementById('totalHours').textContent = Math.round(totalHours);
-        document.getElementById('activeEmployees').textContent = salariedEmployees.length;
+        const tp = document.getElementById('totalPayroll');
+        if (tp) tp.textContent = formatCurrency(totalPayroll);
+        const ar = document.getElementById('attendanceRate');
+        if (ar) ar.textContent = attendanceRate + '%';
+        const th = document.getElementById('totalHours');
+        if (th) th.textContent = Math.round(totalHours);
+        const ae = document.getElementById('activeEmployees');
+        if (ae) ae.textContent = salariedEmployees.length;
 
         renderEmployeeCards();
       } catch (err) {
@@ -538,8 +652,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
       });
     })();
 
-    // --- Daily labor, advances, summary, etc. (unchanged except for being consistent with new helpers)
-
+    // --- Daily labor, attendance, advances, summary — unchanged core logic (kept stable) ---
     window.renderDailyLabor = function () {
       try {
         const monthLabor = filterLaborByMonth(selectedMonth);
@@ -623,15 +736,19 @@ if (window.__ATTENDANCE_APP_LOADED) {
       currentEmployee = null;
     };
 
+    // ---------- Important: renderEmployeeDetail now includes "Manage Overrides" button ----------
     window.renderEmployeeDetail = function (employee) {
       try {
         if (!employee) return;
         const stats = calculateEmployeeStats(employee, selectedMonth);
         const headerHTML = `
-          <div class="employee-header">
+          <div class="employee-header" style="display:flex;justify-content:space-between;align-items:center;">
             <div>
               <div class="employee-name">${employee.name}</div>
               <div class="employee-role">${employee.role} • Base Salary: ${formatCurrency(employee.salary_monthly||0)}</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <button class="btn" onclick="openOverrideModal(${employee.id})" title="Manage date overrides">Manage Overrides</button>
             </div>
           </div>
           <div class="schedule-info">
@@ -665,6 +782,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
       }
     };
 
+    // Calendar renderer respects date_overrides (off days show as weekend)
     window.renderEmployeeCalendar = function (employee) {
       try {
         const container = document.getElementById('employeeCalendar');
@@ -683,7 +801,6 @@ if (window.__ATTENDANCE_APP_LOADED) {
           const attendance = attendanceLog.find(a => a.date === dateStr && Number(a.employee_id) === Number(employee.id));
           let className = 'calendar-day default';
 
-          // if override says off -> treat as weekend/off in calendar
           const override = findDateOverride(employee, dateStr);
           if (override && override.is_off) {
             className = 'calendar-day weekend';
@@ -739,7 +856,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
       }
     };
 
-    // Attendance modal handlers (unchanged logic) -- computed values now use getExpectedHours/getBreakMinutes which check overrides
+    // attendance modal handlers (unchanged logic) use getExpectedHours/getBreakMinutes which now check overrides
     function openAttendanceModal() {
       const modal = document.getElementById('attendanceModal');
       if (modal) modal.classList.add('active');
@@ -861,6 +978,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
       });
     })();
 
+    // daily labor & advances functions (unchanged)
     (function attachDailyLabHandler() {
       const laborForm = document.getElementById('dailyLaborForm');
       if (!laborForm) return;
@@ -1064,7 +1182,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
     }
     window.showToast = showToast;
 
-    // --- Firestore connection & sync (unchanged core logic)
+    // ---------- Firestore connect & realtime listeners (unchanged) ----------
     async function connectFirestore() {
       if (!hasFirebase) {
         console.warn('No firebaseConfig — running local-only.');
@@ -1108,7 +1226,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
 
           if (docs.length > 0) {
             employees = docs.sort((a,b) => (Number(a.id||0) - Number(b.id||0)));
-            // ensure date_overrides array exists on each record (backwards compat)
+            // ensure date_overrides array exists
             employees.forEach(emp => { if (!Array.isArray(emp.date_overrides)) emp.date_overrides = []; });
             nextEmployeeId = (employees.reduce((m,e)=>Math.max(m,Number(e.id||0)),0) || 0) + 1;
             try { renderDashboard(); renderEmployeeSelect(); renderSummary(); renderEmployeeManagement(); } catch(e){}
@@ -1152,6 +1270,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
       }
     }
 
+    // ---------- Safe doc writes (unchanged) ----------
     async function setDocSafe(collectionName, id, data) {
       if (!hasFirebase || !firebaseConnected) {
         console.warn('setDocSafe local fallback', collectionName, id);
@@ -1266,9 +1385,8 @@ if (window.__ATTENDANCE_APP_LOADED) {
       console.log('No Firebase config: running local-only.');
     }
 
-    // ---- NEW: API to manage date overrides on an employee
-    // setDateOverride(employeeId, dateStr, overrideObj)
-    // overrideObj can be: { is_off: true } or { override_schedule: { start:'08:30', end:'17:30', break_mins:30, net_hours:8 } }
+    // ---------- DATE OVERRIDE API (persistence wired) ----------
+    // overrideObj: { is_off: true } OR { override_schedule: { start, end, break_mins, net_hours } }
     window.setDateOverride = function(employeeId, dateStr, overrideObj) {
       const emp = employees.find(e => Number(e.id) === Number(employeeId));
       if (!emp) return console.error('Employee not found for override');
@@ -1276,9 +1394,13 @@ if (window.__ATTENDANCE_APP_LOADED) {
       const idx = emp.date_overrides.findIndex(o => o.date === dateStr);
       const newEntry = Object.assign({ date: dateStr }, overrideObj || {});
       if (idx >= 0) emp.date_overrides[idx] = newEntry; else emp.date_overrides.push(newEntry);
-      // persist locally or to Firestore
-      if (hasFirebase && firebaseConnected) setDocSafe('employees', emp.id, emp);
-      else { renderDashboard(); if (currentEmployee && currentEmployee.id === emp.id) renderEmployeeDetail(emp); }
+      // persist
+      if (hasFirebase && firebaseConnected) {
+        setDocSafe('employees', emp.id, emp);
+      } else {
+        renderDashboard();
+        if (currentEmployee && currentEmployee.id === emp.id) renderEmployeeDetail(emp);
+      }
       console.log('Date override set for', emp.name, dateStr, newEntry);
     };
 
@@ -1286,10 +1408,157 @@ if (window.__ATTENDANCE_APP_LOADED) {
       const emp = employees.find(e => Number(e.id) === Number(employeeId));
       if (!emp || !Array.isArray(emp.date_overrides)) return;
       emp.date_overrides = emp.date_overrides.filter(o => o.date !== dateStr);
-      if (hasFirebase && firebaseConnected) setDocSafe('employees', emp.id, emp);
-      else { renderDashboard(); if (currentEmployee && currentEmployee.id === emp.id) renderEmployeeDetail(emp); }
+      if (hasFirebase && firebaseConnected) {
+        setDocSafe('employees', emp.id, emp);
+      } else {
+        renderDashboard();
+        if (currentEmployee && currentEmployee.id === emp.id) renderEmployeeDetail(emp);
+      }
       console.log('Date override removed for', emp.name, dateStr);
     };
+
+    // ---------- UI: Override modal (injected dynamically) ----------
+    // openOverrideModal(employeeId) - creates modal if not present and shows it for employee
+    window.openOverrideModal = function(employeeId) {
+      const emp = employees.find(e => Number(e.id) === Number(employeeId));
+      if (!emp) return showToast('Employee not found', 'error');
+
+      // create modal container if missing
+      let modal = document.getElementById('overrideModal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'overrideModal';
+        modal.style.position = 'fixed';
+        modal.style.left = '0';
+        modal.style.top = '0';
+        modal.style.width = '100%';
+        modal.style.height = '100%';
+        modal.style.display = 'flex';
+        modal.style.alignItems = 'center';
+        modal.style.justifyContent = 'center';
+        modal.style.background = 'rgba(0,0,0,0.35)';
+        modal.style.zIndex = 9999;
+        modal.innerHTML = `
+          <div style="background:#fff;padding:18px;border-radius:8px;min-width:360px;max-width:720px;box-shadow:0 8px 30px rgba(0,0,0,0.2);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+              <strong id="overrideModalTitle">Manage Overrides</strong>
+              <div>
+                <button id="overrideModalClose" class="btn">Close</button>
+              </div>
+            </div>
+            <div id="overrideList" style="max-height:240px;overflow:auto;margin-bottom:12px;"></div>
+            <div style="border-top:1px solid #eee;padding-top:12px;">
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+                <label style="min-width:72px;">Date</label>
+                <input id="overrideDateInput" type="date" />
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+                <label style="min-width:72px;">Type</label>
+                <select id="overrideTypeSelect">
+                  <option value="off">Off (holiday)</option>
+                  <option value="work">Work (custom schedule)</option>
+                </select>
+              </div>
+              <div id="overrideWorkInputs" style="display:none;gap:8px;flex-wrap:wrap;">
+                <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+                  <label style="min-width:72px;">Start</label><input id="overrideStart" type="time" />
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+                  <label style="min-width:72px;">End</label><input id="overrideEnd" type="time" />
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <label style="min-width:72px;">Break (mins)</label><input id="overrideBreak" type="number" min="0" step="1" value="30" style="width:80px"/>
+                </div>
+              </div>
+              <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;">
+                <button id="overrideAddBtn" class="btn">Add / Update</button>
+              </div>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+
+        // wire close
+        document.getElementById('overrideModalClose').addEventListener('click', () => {
+          modal.style.display = 'none';
+        });
+
+        // toggle work inputs
+        document.getElementById('overrideTypeSelect').addEventListener('change', (e) => {
+          const v = e.target.value;
+          document.getElementById('overrideWorkInputs').style.display = (v === 'work') ? 'flex' : 'none';
+        });
+
+        // add/update button
+        document.getElementById('overrideAddBtn').addEventListener('click', () => {
+          const dateVal = document.getElementById('overrideDateInput').value;
+          if (!dateVal) return showToast('Pick a date', 'error');
+          const type = document.getElementById('overrideTypeSelect').value;
+          if (type === 'off') {
+            // set is_off
+            window.setDateOverride(employeeId, dateVal, { is_off: true });
+          } else {
+            const start = document.getElementById('overrideStart').value;
+            const end = document.getElementById('overrideEnd').value;
+            const br = parseInt(document.getElementById('overrideBreak').value || 30, 10);
+            if (!start || !end) return showToast('Enter start and end time for work override', 'error');
+            const net = Math.max(0, calculateTimeDiff(start, end) - (br / 60));
+            window.setDateOverride(employeeId, dateVal, { override_schedule: { start, end, break_mins: br, net_hours: parseFloat(net.toFixed(2)) } });
+          }
+          // refresh list
+          renderOverrideListFor(employeeId);
+        });
+      }
+
+      // show modal and populate
+      modal.style.display = 'flex';
+      document.getElementById('overrideModalTitle').textContent = `Manage Overrides — ${emp.name}`;
+      // clear inputs
+      document.getElementById('overrideDateInput').value = '';
+      document.getElementById('overrideTypeSelect').value = 'off';
+      document.getElementById('overrideWorkInputs').style.display = 'none';
+      document.getElementById('overrideStart').value = '';
+      document.getElementById('overrideEnd').value = '';
+      document.getElementById('overrideBreak').value = '30';
+      // render list
+      renderOverrideListFor(employeeId);
+    };
+
+    // renders list inside modal
+    function renderOverrideListFor(employeeId) {
+      const emp = employees.find(e => Number(e.id) === Number(employeeId));
+      const listEl = document.getElementById('overrideList');
+      if (!emp || !listEl) return;
+      const rows = (Array.isArray(emp.date_overrides) ? emp.date_overrides : []).slice().sort((a,b)=>a.date < b.date ? 1 : -1);
+      if (rows.length === 0) {
+        listEl.innerHTML = '<div style="color:var(--muted)">No overrides for this employee.</div>';
+        return;
+      }
+      listEl.innerHTML = rows.map(o=>{
+        const desc = o.is_off ? 'Off' : (o.override_schedule ? `${o.override_schedule.start} - ${o.override_schedule.end} (${o.override_schedule.net_hours}h)` : 'Custom');
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f2f2f2;">
+          <div><strong>${formatDate(o.date)}</strong><div style="color:var(--muted);font-size:12px">${desc}</div></div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn" data-emp="${emp.id}" data-date="${o.date}" onclick="removeOverrideFromModal(event)">Remove</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    // remove handler used by generated buttons
+    window.removeOverrideFromModal = function(ev) {
+      const btn = ev.currentTarget;
+      const empId = Number(btn.getAttribute('data-emp'));
+      const date = btn.getAttribute('data-date');
+      if (!confirm(`Remove override on ${formatDate(date)}?`)) return;
+      removeDateOverride(empId, date);
+      renderOverrideListFor(empId);
+      showToast('Override removed', 'success');
+    };
+
+    // expose convenient console helpers (already had setDateOverride/removeDateOverride)
+    // window.setDateOverride(employeeId, dateStr, overrideObj)
+    // window.removeDateOverride(employeeId, dateStr)
 
     window._APP = {
       get employees() { return employees; },
