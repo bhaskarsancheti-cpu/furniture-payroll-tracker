@@ -741,78 +741,198 @@ if (window.__ATTENDANCE_APP_LOADED) {
       }
     }
 
-    (function attachAttendanceFormHandlers() {
-      const entryEmployee = document.getElementById('entryEmployee');
-      const entryDate = document.getElementById('entryDate');
-      const entryStartTime = document.getElementById('entryStartTime');
-      const entryEndTime = document.getElementById('entryEndTime');
-      const entryStatus = document.getElementById('entryStatus');
+   (function attachAttendanceFormHandlers() {
+  const entryEmployee = document.getElementById('entryEmployee');
+  const entryDate = document.getElementById('entryDate');
+  const entryStartTime = document.getElementById('entryStartTime');
+  const entryEndTime = document.getElementById('entryEndTime');
+  const entryStatus = document.getElementById('entryStatus');
+  const entryIsSwap = document.getElementById('entryIsSwap');
+  const swapDetails = document.getElementById('swapDetails');
+  const entrySwapOriginalDates = document.getElementById('entrySwapOriginalDates');
 
-      if (entryEmployee) entryEmployee.addEventListener('change', updateComputedValues);
-      if (entryDate) entryDate.addEventListener('change', updateComputedValues);
-      if (entryStartTime) entryStartTime.addEventListener('change', updateComputedValues);
-      if (entryEndTime) entryEndTime.addEventListener('change', updateComputedValues);
-      if (entryStatus) entryStatus.addEventListener('change', updateComputedValues);
+  // toggle swap UI
+  if (entryIsSwap && swapDetails) {
+    entryIsSwap.addEventListener('change', () => {
+      swapDetails.style.display = entryIsSwap.checked ? 'block' : 'none';
+    });
+  }
 
-      const form = document.getElementById('attendanceForm');
-      if (!form) return;
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const employeeId = Number(document.getElementById('entryEmployee').value);
-        const dateStr = document.getElementById('entryDate').value;
-        const startTime = document.getElementById('entryStartTime').value;
-        const endTime = document.getElementById('entryEndTime').value;
-        const status = document.getElementById('entryStatus').value;
-        const notes = document.getElementById('entryNotes').value || '';
-        if (!employeeId || !dateStr) { showToast('Select employee and date', 'error'); return; }
-        const employee = employees.find(e => Number(e.id) === Number(employeeId));
-        if (!employee) { showToast('Employee not found', 'error'); return; }
-        const breakMins = getBreakMinutes(employee, dateStr);
-        const expectedHours = getExpectedHours(employee, dateStr);
-        let netHours = 0;
-        if (status !== 'Absent' && status !== 'Leave') {
-          const total = calculateTimeDiff(startTime, endTime);
-          netHours = Math.max(0, total - (breakMins / 60));
-        }
-        const overtimeHours = Math.max(0, netHours - expectedHours);
-        const existing = attendanceLog.find(a => a.date === dateStr && Number(a.employee_id) === Number(employeeId));
-        const id = existing ? existing.id : nextAttendanceId++;
-        const entry = {
-          id,
-          date: dateStr,
-          employee_id: Number(employeeId),
-          employee_name: employee.name,
-          role: employee.role,
-          start_time: startTime || '',
-          end_time: endTime || '',
-          break_mins: breakMins,
-          net_hours: parseFloat(netHours.toFixed(2)),
-          expected_hours: expectedHours,
-          status,
-          overtime_hours: parseFloat(overtimeHours.toFixed(2)),
-          notes,
-          last_modified: new Date().toISOString(),
-          recorded_by: currentUser
-        };
+  if (entryEmployee) entryEmployee.addEventListener('change', updateComputedValues);
+  if (entryDate) entryDate.addEventListener('change', updateComputedValues);
+  if (entryStartTime) entryStartTime.addEventListener('change', updateComputedValues);
+  if (entryEndTime) entryEndTime.addEventListener('change', updateComputedValues);
+  if (entryStatus) entryStatus.addEventListener('change', updateComputedValues);
 
-        if (hasFirebase && firebaseConnected) {
-          try {
-            await db.collection('attendance').doc(String(id)).set(entry);
-            showToast('Attendance saved', 'success');
-          } catch (err) {
-            console.error('Firestore attendance write failed', err);
-            showToast('Save failed: ' + (err.message || err), 'error');
+  const form = document.getElementById('attendanceForm');
+  if (!form) return;
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const employeeId = Number(document.getElementById('entryEmployee').value);
+    const dateStr = document.getElementById('entryDate').value;
+    const startTime = document.getElementById('entryStartTime').value;
+    const endTime = document.getElementById('entryEndTime').value;
+    const status = document.getElementById('entryStatus').value;
+    const notes = document.getElementById('entryNotes').value || '';
+    const isSwap = document.getElementById('entryIsSwap') && document.getElementById('entryIsSwap').checked;
+    const swapOriginalsRaw = document.getElementById('entrySwapOriginalDates') ? document.getElementById('entrySwapOriginalDates').value.trim() : '';
+
+    if (!employeeId || !dateStr) { showToast('Select employee and date', 'error'); return; }
+    const employee = employees.find(e => Number(e.id) === Number(employeeId));
+    if (!employee) { showToast('Employee not found', 'error'); return; }
+    const breakMins = getBreakMinutes(employee, dateStr);
+    const expectedHours = getExpectedHours(employee, dateStr);
+    let netHours = 0;
+    if (status !== 'Absent' && status !== 'Leave') {
+      const total = calculateTimeDiff(startTime, endTime);
+      netHours = Math.max(0, total - (breakMins / 60));
+    }
+    const overtimeHours = Math.max(0, netHours - expectedHours);
+    const existing = attendanceLog.find(a => a.date === dateStr && Number(a.employee_id) === Number(employeeId));
+    const id = existing ? existing.id : nextAttendanceId++;
+    const entry = {
+      id,
+      date: dateStr,
+      employee_id: Number(employeeId),
+      employee_name: employee.name,
+      role: employee.role,
+      start_time: startTime || '',
+      end_time: endTime || '',
+      break_mins: breakMins,
+      net_hours: parseFloat(netHours.toFixed(2)),
+      expected_hours: expectedHours,
+      status,
+      overtime_hours: parseFloat(overtimeHours.toFixed(2)),
+      notes,
+      last_modified: new Date().toISOString(),
+      recorded_by: currentUser,
+      is_swap_day: !!isSwap,
+      swapped_from: swapOriginalsRaw || ''
+    };
+
+    // helper to process swap originals (local-only branch if Firebase not connected)
+    async function processSwapOriginalDatesLocally(origDates, targetDate) {
+      if (!Array.isArray(origDates) || origDates.length === 0) return;
+      origDates.forEach(orig => {
+        orig = orig.trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(orig)) return; // skip invalid formats
+        const existingOrig = attendanceLog.find(a => a.date === orig && Number(a.employee_id) === Number(employeeId));
+        if (existingOrig) {
+          // if they already have Present on the original day, do not overwrite Present
+          if (existingOrig.status === 'Present') {
+            existingOrig.notes = (existingOrig.notes || '') + ` | Swap attempted: worked on ${targetDate}; original already Present.`;
+          } else {
+            existingOrig.status = 'Leave';
+            existingOrig.net_hours = 0;
+            existingOrig.expected_hours = getExpectedHours(employee, orig);
+            existingOrig.break_mins = getBreakMinutes(employee, orig);
+            existingOrig.notes = (existingOrig.notes || '') + ` | Marked Leave due to swap: worked on ${targetDate}.`;
+            existingOrig.last_modified = new Date().toISOString();
           }
         } else {
-          const idx = attendanceLog.findIndex(a => a.id === id);
-          if (idx >= 0) attendanceLog[idx] = entry; else attendanceLog.push(entry);
-          renderDashboard();
-          if (currentEmployee) renderEmployeeDetail(currentEmployee);
-          showToast('Attendance saved (local)', 'success');
+          // create a Leave entry for the original date
+          const newId = nextAttendanceId++;
+          const newEntry = {
+            id: newId,
+            date: orig,
+            employee_id: Number(employeeId),
+            employee_name: employee.name,
+            role: employee.role,
+            start_time: '',
+            end_time: '',
+            break_mins: getBreakMinutes(employee, orig),
+            net_hours: 0,
+            expected_hours: getExpectedHours(employee, orig),
+            status: 'Leave',
+            overtime_hours: 0,
+            notes: `Marked Leave due to swap: worked on ${targetDate}.`,
+            last_modified: new Date().toISOString(),
+            recorded_by: currentUser
+          };
+          attendanceLog.push(newEntry);
         }
-        closeAttendanceModal();
       });
-    })();
+    }
+
+    // Save main entry (either Firebase or local)
+    if (hasFirebase && firebaseConnected) {
+      try {
+        await db.collection('attendance').doc(String(id)).set(entry);
+        // if swap — try to update originals in firestore
+        if (isSwap && swapOriginalsRaw) {
+          const origDates = swapOriginalsRaw.split(',').map(s => s.trim()).filter(s => s);
+          for (const orig of origDates) {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(orig)) continue;
+            // fetch existing in firestore by query (employee_id + date)
+            const q = await db.collection('attendance').where('employee_id', '==', Number(employeeId)).where('date', '==', orig).limit(1).get();
+            if (!q.empty) {
+              const doc = q.docs[0];
+              const existingOrig = doc.data();
+              if (existingOrig.status === 'Present') {
+                // append a note only
+                await doc.ref.update({
+                  notes: (existingOrig.notes || '') + ` | Swap attempted: worked on ${dateStr}; original already Present.`,
+                  last_modified: new Date().toISOString()
+                });
+              } else {
+                await doc.ref.update({
+                  status: 'Leave',
+                  net_hours: 0,
+                  expected_hours: getExpectedHours(employee, orig),
+                  break_mins: getBreakMinutes(employee, orig),
+                  notes: (existingOrig.notes || '') + ` | Marked Leave due to swap: worked on ${dateStr}.`,
+                  last_modified: new Date().toISOString()
+                });
+              }
+            } else {
+              // create new Leave doc
+              const newDocId = String(nextAttendanceId++);
+              await db.collection('attendance').doc(newDocId).set({
+                id: Number(newDocId),
+                date: orig,
+                employee_id: Number(employeeId),
+                employee_name: employee.name,
+                role: employee.role,
+                start_time: '',
+                end_time: '',
+                break_mins: getBreakMinutes(employee, orig),
+                net_hours: 0,
+                expected_hours: getExpectedHours(employee, orig),
+                status: 'Leave',
+                overtime_hours: 0,
+                notes: `Marked Leave due to swap: worked on ${dateStr}.`,
+                last_modified: new Date().toISOString(),
+                recorded_by: currentUser
+              });
+            }
+          }
+        }
+
+        showToast('Attendance saved', 'success');
+      } catch (err) {
+        console.error('Firestore attendance write failed', err);
+        showToast('Save failed: ' + (err.message || err), 'error');
+      }
+    } else {
+      // local branch: save/update main entry in attendanceLog
+      const idx = attendanceLog.findIndex(a => a.id === id);
+      if (idx >= 0) attendanceLog[idx] = entry; else attendanceLog.push(entry);
+
+      // If this is a swap-day, process the original dates locally
+      if (isSwap && swapOriginalsRaw) {
+        const origDates = swapOriginalsRaw.split(',').map(s => s.trim()).filter(s => s);
+        await processSwapOriginalDatesLocally(origDates, dateStr);
+      }
+
+      renderDashboard();
+      if (currentEmployee) renderEmployeeDetail(currentEmployee);
+      showToast('Attendance saved (local)', 'success');
+    }
+
+    closeAttendanceModal();
+  });
+})();
+
 
     (function attachDailyLabHandler() {
       const laborForm = document.getElementById('dailyLaborForm');
