@@ -142,12 +142,22 @@ if (window.__ATTENDANCE_APP_LOADED) {
     }
 
     function getExpectedHours(employee, dateStr) {
-      if (!employee || !employee.schedule) return 0;
-      const dayName = getDayName(dateStr);
-      const daySchedule = employee.schedule[dayName];
-      if (!daySchedule || daySchedule === 'off') return 0;
-      return daySchedule.net_hours || 0;
-    }
+  if (!employee) return 0;
+
+  // 1) check for a per-date override already saved in attendanceLog (highest priority)
+  const overrideEntry = attendanceLog.find(a => a.date === dateStr && Number(a.employee_id) === Number(employee.id) && (a.override_expected_hours || a.override_expected_hours === 0));
+  if (overrideEntry && (overrideEntry.override_expected_hours !== null && typeof overrideEntry.override_expected_hours !== 'undefined')) {
+    return Number(overrideEntry.override_expected_hours) || 0;
+  }
+
+  // 2) otherwise fall back to schedule for the day
+  if (!employee.schedule) return 0;
+  const dayName = getDayName(dateStr);
+  const daySchedule = employee.schedule[dayName];
+  if (!daySchedule || daySchedule === 'off') return 0;
+  return daySchedule.net_hours || 0;
+}
+
 
     function getBreakMinutes(employee, dateStr) {
       if (!employee || !employee.schedule) return 30;
@@ -741,20 +751,34 @@ if (window.__ATTENDANCE_APP_LOADED) {
       }
     }
 
-   (function attachAttendanceFormHandlers() {
+(function attachAttendanceFormHandlers() {
   const entryEmployee = document.getElementById('entryEmployee');
   const entryDate = document.getElementById('entryDate');
   const entryStartTime = document.getElementById('entryStartTime');
   const entryEndTime = document.getElementById('entryEndTime');
   const entryStatus = document.getElementById('entryStatus');
+
   const entryIsSwap = document.getElementById('entryIsSwap');
   const swapDetails = document.getElementById('swapDetails');
   const entrySwapOriginalDates = document.getElementById('entrySwapOriginalDates');
+
+  const entryIsWorkOverride = document.getElementById('entryIsWorkOverride');
+  const workOverrideDetails = document.getElementById('workOverrideDetails');
+  const entryOverrideHours = document.getElementById('entryOverrideHours');
 
   // toggle swap UI
   if (entryIsSwap && swapDetails) {
     entryIsSwap.addEventListener('change', () => {
       swapDetails.style.display = entryIsSwap.checked ? 'block' : 'none';
+    });
+  }
+
+  // toggle work-override UI
+  if (entryIsWorkOverride && workOverrideDetails) {
+    entryIsWorkOverride.addEventListener('change', () => {
+      workOverrideDetails.style.display = entryIsWorkOverride.checked ? 'block' : 'none';
+      // update computed values when toggling
+      updateComputedValues();
     });
   }
 
@@ -776,20 +800,39 @@ if (window.__ATTENDANCE_APP_LOADED) {
     const notes = document.getElementById('entryNotes').value || '';
     const isSwap = document.getElementById('entryIsSwap') && document.getElementById('entryIsSwap').checked;
     const swapOriginalsRaw = document.getElementById('entrySwapOriginalDates') ? document.getElementById('entrySwapOriginalDates').value.trim() : '';
+    const isWorkOverride = document.getElementById('entryIsWorkOverride') && document.getElementById('entryIsWorkOverride').checked;
+    const overrideHoursRaw = document.getElementById('entryOverrideHours') ? document.getElementById('entryOverrideHours').value.trim() : '';
 
     if (!employeeId || !dateStr) { showToast('Select employee and date', 'error'); return; }
     const employee = employees.find(e => Number(e.id) === Number(employeeId));
     if (!employee) { showToast('Employee not found', 'error'); return; }
+
+    // If work-override is set and overrideHours provided, use that as expectedHours.
+    let expectedHours = getExpectedHours(employee, dateStr); // this function now respects any saved override in attendanceLog
+    if (isWorkOverride) {
+      const parsed = parseFloat(overrideHoursRaw);
+      if (!isNaN(parsed) && parsed >= 0) {
+        expectedHours = parsed;
+      } else {
+        // If no number given, try to infer from a typical workday: pick first non-off day in schedule
+        const scheduleDays = Object.values(employee.schedule || {});
+        const sample = scheduleDays.find(d => d !== 'off' && d && d.net_hours);
+        expectedHours = sample ? (sample.net_hours || 0) : expectedHours;
+      }
+    }
+
     const breakMins = getBreakMinutes(employee, dateStr);
-    const expectedHours = getExpectedHours(employee, dateStr);
     let netHours = 0;
     if (status !== 'Absent' && status !== 'Leave') {
       const total = calculateTimeDiff(startTime, endTime);
       netHours = Math.max(0, total - (breakMins / 60));
     }
+
     const overtimeHours = Math.max(0, netHours - expectedHours);
+
     const existing = attendanceLog.find(a => a.date === dateStr && Number(a.employee_id) === Number(employeeId));
     const id = existing ? existing.id : nextAttendanceId++;
+
     const entry = {
       id,
       date: dateStr,
@@ -807,18 +850,19 @@ if (window.__ATTENDANCE_APP_LOADED) {
       last_modified: new Date().toISOString(),
       recorded_by: currentUser,
       is_swap_day: !!isSwap,
-      swapped_from: swapOriginalsRaw || ''
+      swapped_from: swapOriginalsRaw || '',
+      is_work_override: !!isWorkOverride,
+      override_expected_hours: (isWorkOverride && overrideHoursRaw) ? Number(overrideHoursRaw) : (isWorkOverride ? expectedHours : undefined)
     };
 
-    // helper to process swap originals (local-only branch if Firebase not connected)
+    // helper: process swap originals locally
     async function processSwapOriginalDatesLocally(origDates, targetDate) {
       if (!Array.isArray(origDates) || origDates.length === 0) return;
       origDates.forEach(orig => {
         orig = orig.trim();
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(orig)) return; // skip invalid formats
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(orig)) return;
         const existingOrig = attendanceLog.find(a => a.date === orig && Number(a.employee_id) === Number(employeeId));
         if (existingOrig) {
-          // if they already have Present on the original day, do not overwrite Present
           if (existingOrig.status === 'Present') {
             existingOrig.notes = (existingOrig.notes || '') + ` | Swap attempted: worked on ${targetDate}; original already Present.`;
           } else {
@@ -830,7 +874,6 @@ if (window.__ATTENDANCE_APP_LOADED) {
             existingOrig.last_modified = new Date().toISOString();
           }
         } else {
-          // create a Leave entry for the original date
           const newId = nextAttendanceId++;
           const newEntry = {
             id: newId,
@@ -854,22 +897,21 @@ if (window.__ATTENDANCE_APP_LOADED) {
       });
     }
 
-    // Save main entry (either Firebase or local)
+    // Save main entry (firebase or local)
     if (hasFirebase && firebaseConnected) {
       try {
         await db.collection('attendance').doc(String(id)).set(entry);
-        // if swap — try to update originals in firestore
+
+        // handle swap originals in firestore (if any)
         if (isSwap && swapOriginalsRaw) {
           const origDates = swapOriginalsRaw.split(',').map(s => s.trim()).filter(s => s);
           for (const orig of origDates) {
             if (!/^\d{4}-\d{2}-\d{2}$/.test(orig)) continue;
-            // fetch existing in firestore by query (employee_id + date)
             const q = await db.collection('attendance').where('employee_id', '==', Number(employeeId)).where('date', '==', orig).limit(1).get();
             if (!q.empty) {
               const doc = q.docs[0];
               const existingOrig = doc.data();
               if (existingOrig.status === 'Present') {
-                // append a note only
                 await doc.ref.update({
                   notes: (existingOrig.notes || '') + ` | Swap attempted: worked on ${dateStr}; original already Present.`,
                   last_modified: new Date().toISOString()
@@ -885,7 +927,6 @@ if (window.__ATTENDANCE_APP_LOADED) {
                 });
               }
             } else {
-              // create new Leave doc
               const newDocId = String(nextAttendanceId++);
               await db.collection('attendance').doc(newDocId).set({
                 id: Number(newDocId),
@@ -914,11 +955,11 @@ if (window.__ATTENDANCE_APP_LOADED) {
         showToast('Save failed: ' + (err.message || err), 'error');
       }
     } else {
-      // local branch: save/update main entry in attendanceLog
+      // local branch
       const idx = attendanceLog.findIndex(a => a.id === id);
       if (idx >= 0) attendanceLog[idx] = entry; else attendanceLog.push(entry);
 
-      // If this is a swap-day, process the original dates locally
+      // if swap-day, process originals
       if (isSwap && swapOriginalsRaw) {
         const origDates = swapOriginalsRaw.split(',').map(s => s.trim()).filter(s => s);
         await processSwapOriginalDatesLocally(origDates, dateStr);
@@ -932,6 +973,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
     closeAttendanceModal();
   });
 })();
+
 
 
     (function attachDailyLabHandler() {
