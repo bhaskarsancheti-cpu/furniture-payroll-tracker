@@ -913,7 +913,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
       if (isWorkOverrideEl && isWorkOverrideEl.checked) {
         if (overrideHoursEl && overrideHoursEl.value !== '') {
           const parsed = parseFloat(overrideHoursEl.value);
-          if (!isNaN(parsed) and parsed >= 0) expectedHours = parsed;
+          if (!isNaN(parsed) && parsed >= 0) expectedHours = parsed; // <-- fixed: use JS && not 'and'
         } else {
           // infer: use sample schedule day if no value typed yet
           const scheduleDays = Object.values(employee.schedule || {});
