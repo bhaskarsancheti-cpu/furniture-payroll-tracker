@@ -21,6 +21,9 @@ if (window.__ATTENDANCE_APP_LOADED) {
     let db = null;
     let dataSeeded = false;
 
+    // Default grace minutes for shortfalls (can override per-employee with employee.grace_mins)
+    const DEFAULT_GRACE_MINUTES = 60;
+
     let employees = [
       {
         id: 1,
@@ -51,6 +54,8 @@ if (window.__ATTENDANCE_APP_LOADED) {
         status: "Active",
         phone: "98765-43211",
         salary_history: [{ date: "2025-01-01", salary: 26000, reason: "Initial hire" }],
+        // you can set a per-employee grace_mins (e.g. 60)
+        grace_mins: 60,
         schedule: {
           monday: { start: "08:30", end: "19:00", break_mins: 30, net_hours: 10 },
           tuesday: { start: "08:30", end: "19:00", break_mins: 30, net_hours: 10 },
@@ -214,18 +219,31 @@ if (window.__ATTENDANCE_APP_LOADED) {
       }, 0);
     }
 
-    // --- REPLACED calculateEmployeeStats: per-day salary = monthly / 30 and prorated deductions/overtime ---
+    // --- Updated calculateEmployeeStats with swap/holiday/grace handling ---
     function calculateEmployeeStats(employee, month) {
-      // NEW: payroll based on per-day salary = monthly / 30 (as you specified)
+      // payroll base: salary monthly fixed (your rule). Deductions only when uncompensated absence.
+      // per-day rate (used only for deductions and OT hourly calculation)
       const perDaySalary = (employee.salary_monthly || 0) / 30;
 
-      // collect attendance for the month
       const monthAttendance = filterAttendanceByMonth(month).filter(entry => Number(entry.employee_id) === Number(employee.id));
       let actualHours = 0, overtimeHours = 0, absenceHours = 0, presentDays = 0, absentDays = 0;
       let totalDeductions = 0;
       let totalOvertimePay = 0;
 
+      // compute grace minutes for this employee
+      const graceMinutes = (typeof employee.grace_mins === 'number') ? employee.grace_mins : DEFAULT_GRACE_MINUTES;
+
       monthAttendance.forEach(entry => {
+        // A: If entry is explicitly marked as swap_compensated (created by swap), or status = 'Swapped-off', or status='Holiday'
+        // then treat as paid — do not deduct.
+        if (entry.swap_compensated || entry.status === 'Swapped-off' || entry.status === 'Holiday') {
+          // Counting: don't increment presentDays, but also do not deduct; reflect expected hours maybe zero
+          // If designer wants to count these as paid present days, we can add presentDays++, but by default we
+          // treat them as paid non-work days and don't affect actualHours/overtime.
+          return;
+        }
+
+        // For normal entries:
         const dayExpected = Number(entry.expected_hours || getExpectedHours(employee, entry.date) || 0);
         const dayNet = Number(entry.net_hours || 0);
 
@@ -233,41 +251,45 @@ if (window.__ATTENDANCE_APP_LOADED) {
           actualHours += dayNet;
           presentDays++;
 
-          // overtime for that day (only when net > expected)
+          // overtime
           if (dayNet > dayExpected) {
             const ot = dayNet - dayExpected;
             overtimeHours += ot;
-            // compute hourly rate for that day from per-day salary
             const hourlyRate = (dayExpected > 0) ? (perDaySalary / dayExpected) : (perDaySalary / 8 || 0);
             const otPay = ot * hourlyRate * 1.5;
             totalOvertimePay += otPay;
           }
 
-          // If worked less than expected (but still marked present), prorate deduction for shortfall
+          // shortfall handling: apply grace
           if (dayNet < dayExpected) {
-            const shortfall = dayExpected - dayNet;
-            // prorated deduction relative to that day's expected hours
-            const deduction = (dayExpected > 0) ? (perDaySalary * (shortfall / dayExpected)) : 0;
-            totalDeductions += deduction;
-            absenceHours += shortfall;
+            const shortfall = dayExpected - dayNet; // in hours
+            const shortfallMins = shortfall * 60;
+            if (shortfallMins > graceMinutes) {
+              // only deduct beyond grace
+              const effectiveShortfall = (shortfallMins - graceMinutes) / 60;
+              // prorated deduction relative to that day's expected hours
+              const deduction = (dayExpected > 0) ? (perDaySalary * (effectiveShortfall / dayExpected)) : 0;
+              totalDeductions += deduction;
+              absenceHours += effectiveShortfall;
+            } else {
+              // within grace -> no deduction
+            }
           }
 
-          // half-day explicit handling (if status is 'Half-day', also ensure deduction is roughly half-day)
+          // explicit Half-day: ensure at least half-day deduction if meaningful (but still respect grace)
           if (entry.status === 'Half-day') {
-            // add half-day if not already covered by shortfall calculation
-            // Typical case: Half-day may have net_hours roughly half; but enforce at least half-day deduction
             const halfDeduction = perDaySalary / 2;
-            // If shortfall deduction already >= half-day, don't double count.
-            if (dayExpected > 0) {
-              const shortfall = Math.max(0, dayExpected - dayNet);
-              const shortfallDeduction = perDaySalary * (shortfall / dayExpected);
-              if (shortfallDeduction < halfDeduction) {
-                totalDeductions += (halfDeduction - shortfallDeduction);
-                absenceHours += (dayExpected * ((halfDeduction - shortfallDeduction) / perDaySalary));
-              }
-            } else {
-              totalDeductions += halfDeduction;
-              absenceHours += 0.5 * (dayExpected || 8);
+            // compute existing shortfall deduction for today (if any) to avoid double counting
+            const shortfall = Math.max(0, dayExpected - dayNet);
+            const shortfallMins = shortfall * 60;
+            let shortfallDeduction = 0;
+            if (shortfallMins > graceMinutes) {
+              const eff = (shortfallMins - graceMinutes) / 60;
+              shortfallDeduction = (dayExpected > 0) ? (perDaySalary * (eff / dayExpected)) : 0;
+            }
+            if (shortfallDeduction < halfDeduction) {
+              totalDeductions += (halfDeduction - shortfallDeduction);
+              absenceHours += (dayExpected * ((halfDeduction - shortfallDeduction) / perDaySalary));
             }
           }
 
@@ -276,10 +298,22 @@ if (window.__ATTENDANCE_APP_LOADED) {
           totalDeductions += perDaySalary;
           absentDays++;
           absenceHours += dayExpected || 0;
+        } else {
+          // any other statuses — be conservative: if no net hours and it was expected, treat as absent
+          if (!entry.net_hours || entry.net_hours === 0) {
+            // if expected day
+            if (dayExpected > 0) {
+              totalDeductions += perDaySalary;
+              absentDays++;
+              absenceHours += dayExpected;
+            }
+          } else {
+            actualHours += dayNet;
+          }
         }
       });
 
-      // expectedHours: sum of expected across every date in the month (keeps display consistent)
+      // expectedHours: sum of expected across every date in the month
       let expectedHours = 0;
       try {
         const [y, m] = month.split('-').map(Number);
@@ -576,7 +610,9 @@ if (window.__ATTENDANCE_APP_LOADED) {
           phone,
           salary_history: [{ date: hireDate, salary, reason: 'Initial hire' }],
           schedule,
-          expected_monthly_hours: Math.round(totalMonthlyHours)
+          expected_monthly_hours: Math.round(totalMonthlyHours),
+          // default grace minutes can be set here (optional)
+          grace_mins: DEFAULT_GRACE_MINUTES
         };
         
         if (hasFirebase && firebaseConnected) {
@@ -752,6 +788,10 @@ if (window.__ATTENDANCE_APP_LOADED) {
               className = 'calendar-day absent';
             } else if (attendance.status === 'Leave' || attendance.status === 'Half-day') {
               className = 'calendar-day leave';
+            } else if (attendance.status === 'Swapped-off') {
+              className = 'calendar-day swapped';
+            } else if (attendance.status === 'Holiday') {
+              className = 'calendar-day holiday';
             }
           } else {
             // No attendance recorded — fall back to schedule to mark weekends/off days
@@ -780,6 +820,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
           const metaBadges = [];
           if (record.is_swap_day) metaBadges.push(`<span class="modified-badge">Swap</span>`);
           if (record.is_work_override) metaBadges.push(`<span class="modified-badge">Override</span>`);
+          if (record.swap_compensated) metaBadges.push(`<span class="modified-badge">Compensated</span>`);
           const metaHtml = metaBadges.length ? `<div style="margin-top:6px">${metaBadges.join(' ')}</div>` : '';
           return `
             <div class="attendance-item">
@@ -872,7 +913,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
       if (isWorkOverrideEl && isWorkOverrideEl.checked) {
         if (overrideHoursEl && overrideHoursEl.value !== '') {
           const parsed = parseFloat(overrideHoursEl.value);
-          if (!isNaN(parsed) && parsed >= 0) expectedHours = parsed;
+          if (!isNaN(parsed) and parsed >= 0) expectedHours = parsed;
         } else {
           // infer: use sample schedule day if no value typed yet
           const scheduleDays = Object.values(employee.schedule || {});
@@ -954,7 +995,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
         if (!employee) { showToast('Employee not found', 'error'); return; }
 
         // If work-override is set and overrideHours provided, use that as expectedHours.
-        let expectedHours = getExpectedHours(employee, dateStr); // this function now respects any saved override in attendanceLog
+        let expectedHours = getExpectedHours(employee, dateStr); // this function now respects any saved per-date override in attendanceLog
         if (isWorkOverride) {
           const parsed = parseFloat(overrideHoursRaw);
           if (!isNaN(parsed) && parsed >= 0) {
@@ -969,7 +1010,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
 
         const breakMins = getBreakMinutes(employee, dateStr);
         let netHours = 0;
-        if (status !== 'Absent' && status !== 'Leave') {
+        if (status !== 'Absent' && status !== 'Leave' && status !== 'Holiday') {
           const total = calculateTimeDiff(startTime, endTime);
           netHours = Math.max(0, total - (breakMins / 60));
         }
@@ -1015,11 +1056,14 @@ if (window.__ATTENDANCE_APP_LOADED) {
               if (existingOrig.status === 'Present') {
                 existingOrig.notes = (existingOrig.notes || '') + ` | Swap attempted: worked on ${targetDate}; original already Present.`;
               } else {
-                existingOrig.status = 'Leave';
+                // Instead of marking 'Leave' (which caused deductions), mark as 'Swapped-off' and set swap_compensated true
+                existingOrig.status = 'Swapped-off';
                 existingOrig.net_hours = 0;
-                existingOrig.expected_hours = getExpectedHours(employee, orig);
+                // When swapped-off, expected_hours set to 0 so it won't be counted for deductions or expected hours.
+                existingOrig.expected_hours = 0;
                 existingOrig.break_mins = getBreakMinutes(employee, orig);
-                existingOrig.notes = (existingOrig.notes || '') + ` | Marked Leave due to swap: worked on ${targetDate}.`;
+                existingOrig.swap_compensated = true;
+                existingOrig.notes = (existingOrig.notes || '') + ` | Marked Swapped-off (compensated) because worked on ${targetDate}.`;
                 existingOrig.last_modified = new Date().toISOString();
               }
             } else {
@@ -1034,12 +1078,14 @@ if (window.__ATTENDANCE_APP_LOADED) {
                 end_time: '',
                 break_mins: getBreakMinutes(employee, orig),
                 net_hours: 0,
-                expected_hours: getExpectedHours(employee, orig),
-                status: 'Leave',
+                // expected_hours set to 0 because this day is compensated via swap
+                expected_hours: 0,
+                status: 'Swapped-off',
                 overtime_hours: 0,
-                notes: `Marked Leave due to swap: worked on ${targetDate}.`,
+                notes: `Marked Swapped-off (compensated): worked on ${targetDate}.`,
                 last_modified: new Date().toISOString(),
-                recorded_by: currentUser
+                recorded_by: currentUser,
+                swap_compensated: true
               };
               attendanceLog.push(newEntry);
             }
@@ -1066,12 +1112,14 @@ if (window.__ATTENDANCE_APP_LOADED) {
                       last_modified: new Date().toISOString()
                     });
                   } else {
+                    // Mark as Swapped-off and add swap_compensated flag and set expected_hours=0
                     await doc.ref.update(sanitizeForFirestore({
-                      status: 'Leave',
+                      status: 'Swapped-off',
                       net_hours: 0,
-                      expected_hours: getExpectedHours(employee, orig),
+                      expected_hours: 0,
                       break_mins: getBreakMinutes(employee, orig),
-                      notes: (existingOrig.notes || '') + ` | Marked Leave due to swap: worked on ${dateStr}.`,
+                      swap_compensated: true,
+                      notes: (existingOrig.notes || '') + ` | Marked Swapped-off (compensated): worked on ${dateStr}.`,
                       last_modified: new Date().toISOString()
                     }));
                   }
@@ -1087,12 +1135,13 @@ if (window.__ATTENDANCE_APP_LOADED) {
                     end_time: '',
                     break_mins: getBreakMinutes(employee, orig),
                     net_hours: 0,
-                    expected_hours: getExpectedHours(employee, orig),
-                    status: 'Leave',
+                    expected_hours: 0,
+                    status: 'Swapped-off',
                     overtime_hours: 0,
-                    notes: `Marked Leave due to swap: worked on ${dateStr}.`,
+                    notes: `Marked Swapped-off (compensated): worked on ${dateStr}.`,
                     last_modified: new Date().toISOString(),
-                    recorded_by: currentUser
+                    recorded_by: currentUser,
+                    swap_compensated: true
                   }));
                 }
               }
@@ -1527,9 +1576,15 @@ if (window.__ATTENDANCE_APP_LOADED) {
       ev.stopPropagation();
       const record = attendanceLog.find(a => Number(a.id) === Number(attendanceId));
       if (!record) return;
-      const sel = prompt('Set status (Present, Half-day, Leave, Absent):', record.status || 'Present');
+      const sel = prompt('Set status (Present, Half-day, Leave, Absent, Holiday, Swapped-off):', record.status || 'Present');
       if (!sel) return;
       record.status = sel;
+      if (sel === 'Swapped-off') {
+        // mark compensated so stats won't deduct
+        record.swap_compensated = true;
+        record.expected_hours = 0;
+        record.net_hours = 0;
+      }
       if (hasFirebase && firebaseConnected) setDocSafe('attendance', record.id, record);
       else { renderAttendanceRecords(currentEmployee); renderDashboard(); showToast('Status updated (local)', 'success'); }
     };
