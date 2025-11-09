@@ -141,23 +141,44 @@ if (window.__ATTENDANCE_APP_LOADED) {
       return (endMinutes - startMinutes) / 60;
     }
 
+    // New helper: sanitize object for Firestore (remove undefined fields recursively)
+    function sanitizeForFirestore(obj) {
+      if (!obj || typeof obj !== 'object') return obj;
+      if (Array.isArray(obj)) {
+        return obj.map(sanitizeForFirestore);
+      }
+      const out = {};
+      Object.keys(obj).forEach(key => {
+        const val = obj[key];
+        if (typeof val === 'undefined') {
+          // skip
+        } else if (val === null) {
+          out[key] = null;
+        } else if (typeof val === 'object') {
+          out[key] = sanitizeForFirestore(val);
+        } else {
+          out[key] = val;
+        }
+      });
+      return out;
+    }
+
     function getExpectedHours(employee, dateStr) {
-  if (!employee) return 0;
+      if (!employee) return 0;
 
-  // 1) check for a per-date override already saved in attendanceLog (highest priority)
-  const overrideEntry = attendanceLog.find(a => a.date === dateStr && Number(a.employee_id) === Number(employee.id) && (a.override_expected_hours || a.override_expected_hours === 0));
-  if (overrideEntry && (overrideEntry.override_expected_hours !== null && typeof overrideEntry.override_expected_hours !== 'undefined')) {
-    return Number(overrideEntry.override_expected_hours) || 0;
-  }
+      // 1) check for a per-date override already saved in attendanceLog (highest priority)
+      const overrideEntry = attendanceLog.find(a => a.date === dateStr && Number(a.employee_id) === Number(employee.id) && (a.override_expected_hours || a.override_expected_hours === 0));
+      if (overrideEntry && (overrideEntry.override_expected_hours !== null && typeof overrideEntry.override_expected_hours !== 'undefined')) {
+        return Number(overrideEntry.override_expected_hours) || 0;
+      }
 
-  // 2) otherwise fall back to schedule for the day
-  if (!employee.schedule) return 0;
-  const dayName = getDayName(dateStr);
-  const daySchedule = employee.schedule[dayName];
-  if (!daySchedule || daySchedule === 'off') return 0;
-  return daySchedule.net_hours || 0;
-}
-
+      // 2) otherwise fall back to schedule for the day
+      if (!employee.schedule) return 0;
+      const dayName = getDayName(dateStr);
+      const daySchedule = employee.schedule[dayName];
+      if (!daySchedule || daySchedule === 'off') return 0;
+      return daySchedule.net_hours || 0;
+    }
 
     function getBreakMinutes(employee, dateStr) {
       if (!employee || !employee.schedule) return 30;
@@ -194,6 +215,8 @@ if (window.__ATTENDANCE_APP_LOADED) {
     }
 
     function calculateEmployeeStats(employee, month) {
+      // month is in YYYY-MM format
+      // collect attendance for the month
       const monthAttendance = filterAttendanceByMonth(month).filter(entry => Number(entry.employee_id) === Number(employee.id));
       let actualHours = 0, overtimeHours = 0, absenceHours = 0, presentDays = 0, absentDays = 0;
 
@@ -210,7 +233,20 @@ if (window.__ATTENDANCE_APP_LOADED) {
         }
       });
 
-      const expectedHours = employee.expected_monthly_hours || 0;
+      // Compute expected hours for the whole month by iterating every date — this picks up per-date overrides
+      let expectedHours = 0;
+      try {
+        const [y, m] = month.split('-').map(Number);
+        const lastDay = new Date(y, m, 0).getDate();
+        for (let d = 1; d <= lastDay; d++) {
+          const dateStr = `${month}-${String(d).padStart(2,'0')}`;
+          expectedHours += Number(getExpectedHours(employee, dateStr) || 0);
+        }
+      } catch (err) {
+        // Fallback to stored expected_monthly_hours if something fails
+        expectedHours = employee.expected_monthly_hours || 0;
+      }
+
       const hourlyRate = expectedHours > 0 ? (employee.salary_monthly || 0) / expectedHours : 0;
       const deductions = absenceHours * hourlyRate;
       const overtimePay = overtimeHours * hourlyRate * 1.5;
@@ -491,7 +527,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
         
         if (hasFirebase && firebaseConnected) {
           try {
-            await db.collection('employees').doc(String(id)).set(employee);
+            await db.collection('employees').doc(String(id)).set(sanitizeForFirestore(employee));
             showToast('Employee added successfully', 'success');
           } catch (err) {
             console.error('Failed to add employee', err);
@@ -635,6 +671,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
       }
     };
 
+    // Updated calendar render: check attendance first, then schedule for weekends/off
     window.renderEmployeeCalendar = function (employee) {
       try {
         const container = document.getElementById('employeeCalendar');
@@ -651,13 +688,22 @@ if (window.__ATTENDANCE_APP_LOADED) {
           const dateStr = `${year}-${month}-${String(day).padStart(2,'0')}`;
           const dayName = getDayName(dateStr);
           const attendance = attendanceLog.find(a => a.date === dateStr && Number(a.employee_id) === Number(employee.id));
+
+          // Check attendance first (present/leave/absent overrides schedule view).
           let className = 'calendar-day default';
-          if (employee.schedule && employee.schedule[dayName] === 'off') className = 'calendar-day weekend';
-          else if (attendance) {
-            if (attendance.status === 'Present') className = attendance.overtime_hours > 0 ? 'calendar-day overtime' : 'calendar-day present';
-            else if (attendance.status === 'Absent') className = 'calendar-day absent';
-            else if (attendance.status === 'Leave' || attendance.status === 'Half-day') className = 'calendar-day leave';
+          if (attendance) {
+            if (attendance.status === 'Present') {
+              className = attendance.overtime_hours > 0 ? 'calendar-day overtime' : 'calendar-day present';
+            } else if (attendance.status === 'Absent') {
+              className = 'calendar-day absent';
+            } else if (attendance.status === 'Leave' || attendance.status === 'Half-day') {
+              className = 'calendar-day leave';
+            }
+          } else {
+            // No attendance recorded — fall back to schedule to mark weekends/off days
+            if (employee.schedule && employee.schedule[dayName] === 'off') className = 'calendar-day weekend';
           }
+
           calendarHTML += `<div class="${className}">${day}</div>`;
         }
         container.innerHTML = calendarHTML;
@@ -677,12 +723,17 @@ if (window.__ATTENDANCE_APP_LOADED) {
         }
         container.innerHTML = records.map(record => {
           const modifiedBadge = record.last_modified ? `<span class="modified-badge">Modified ${record.last_modified.split('T')[0]}</span>` : '';
+          const metaBadges = [];
+          if (record.is_swap_day) metaBadges.push(`<span class="modified-badge">Swap</span>`);
+          if (record.is_work_override) metaBadges.push(`<span class="modified-badge">Override</span>`);
+          const metaHtml = metaBadges.length ? `<div style="margin-top:6px">${metaBadges.join(' ')}</div>` : '';
           return `
             <div class="attendance-item">
               <div class="attendance-date">${formatDate(record.date)}</div>
               <div class="attendance-details">
                 <div class="attendance-time">${record.start_time || '-'} - ${record.end_time || '-'} • ${record.net_hours || 0} hrs (Expected: ${record.expected_hours || 0} hrs)${modifiedBadge}</div>
                 ${record.notes ? `<div class="attendance-time">Notes: ${record.notes}</div>` : ''}
+                ${metaHtml}
               </div>
               <div style="display:flex;align-items:center;gap:12px;">
                 <div class="status-dropdown">
@@ -714,6 +765,14 @@ if (window.__ATTENDANCE_APP_LOADED) {
       const today = new Date().toISOString().split('T')[0];
       const entryDate = document.getElementById('entryDate');
       if (entryDate) entryDate.value = today;
+      // reset swap/override UIs
+      const isSwapEl = document.getElementById('entryIsSwap');
+      const swapDetails = document.getElementById('swapDetails');
+      if (isSwapEl) { isSwapEl.checked = false; if (swapDetails) swapDetails.style.display = 'none'; }
+      const isWorkOverrideEl = document.getElementById('entryIsWorkOverride');
+      const workOverrideDetails = document.getElementById('workOverrideDetails');
+      const entryOverrideHours = document.getElementById('entryOverrideHours');
+      if (isWorkOverrideEl) { isWorkOverrideEl.checked = false; if (workOverrideDetails) workOverrideDetails.style.display = 'none'; if (entryOverrideHours) entryOverrideHours.value = ''; }
       updateComputedValues();
     }
     window.openAttendanceModal = openAttendanceModal;
@@ -726,22 +785,54 @@ if (window.__ATTENDANCE_APP_LOADED) {
     }
     window.closeAttendanceModal = closeAttendanceModal;
 
+    // Updated: respect UI override checkbox in computed values
     function updateComputedValues() {
       const employeeId = parseInt(document.getElementById('entryEmployee').value || 0);
       const dateStr = document.getElementById('entryDate').value;
       const startTime = document.getElementById('entryStartTime').value;
       const endTime = document.getElementById('entryEndTime').value;
       const status = document.getElementById('entryStatus').value;
-      if (!employeeId || !dateStr) return;
+
+      if (!employeeId || !dateStr) {
+        // Reset UI if nothing selected
+        const cb0 = document.getElementById('computedBreak');
+        const ce0 = document.getElementById('computedExpectedHours');
+        const cn0 = document.getElementById('computedNetHours');
+        if (cb0) cb0.textContent = '30 mins';
+        if (ce0) ce0.textContent = '0 hrs';
+        if (cn0) cn0.textContent = '0 hrs';
+        return;
+      }
+
       const employee = employees.find(e => Number(e.id) === Number(employeeId));
       if (!employee) return;
+
       const breakMins = getBreakMinutes(employee, dateStr);
-      const expectedHours = getExpectedHours(employee, dateStr);
+
+      // base expected (this will account for any saved per-date override because getExpectedHours checks attendanceLog)
+      let expectedHours = getExpectedHours(employee, dateStr);
+
+      // If the UI override checkbox is checked, show the override value (if provided) immediately
+      const isWorkOverrideEl = document.getElementById('entryIsWorkOverride');
+      const overrideHoursEl = document.getElementById('entryOverrideHours');
+      if (isWorkOverrideEl && isWorkOverrideEl.checked) {
+        if (overrideHoursEl && overrideHoursEl.value !== '') {
+          const parsed = parseFloat(overrideHoursEl.value);
+          if (!isNaN(parsed) && parsed >= 0) expectedHours = parsed;
+        } else {
+          // infer: use sample schedule day if no value typed yet
+          const scheduleDays = Object.values(employee.schedule || {});
+          const sample = scheduleDays.find(d => d !== 'off' && d && d.net_hours);
+          expectedHours = sample ? (sample.net_hours || expectedHours) : expectedHours;
+        }
+      }
+
       const cb = document.getElementById('computedBreak');
       const ce = document.getElementById('computedExpectedHours');
       const cn = document.getElementById('computedNetHours');
       if (cb) cb.textContent = breakMins + ' mins';
       if (ce) ce.textContent = expectedHours + ' hrs';
+
       if (startTime && endTime && status !== 'Absent') {
         const tot = calculateTimeDiff(startTime, endTime);
         const net = Math.max(0, tot - (breakMins / 60));
@@ -751,185 +842,136 @@ if (window.__ATTENDANCE_APP_LOADED) {
       }
     }
 
-(function attachAttendanceFormHandlers() {
-  const entryEmployee = document.getElementById('entryEmployee');
-  const entryDate = document.getElementById('entryDate');
-  const entryStartTime = document.getElementById('entryStartTime');
-  const entryEndTime = document.getElementById('entryEndTime');
-  const entryStatus = document.getElementById('entryStatus');
+    (function attachAttendanceFormHandlers() {
+      const entryEmployee = document.getElementById('entryEmployee');
+      const entryDate = document.getElementById('entryDate');
+      const entryStartTime = document.getElementById('entryStartTime');
+      const entryEndTime = document.getElementById('entryEndTime');
+      const entryStatus = document.getElementById('entryStatus');
 
-  const entryIsSwap = document.getElementById('entryIsSwap');
-  const swapDetails = document.getElementById('swapDetails');
-  const entrySwapOriginalDates = document.getElementById('entrySwapOriginalDates');
+      const entryIsSwap = document.getElementById('entryIsSwap');
+      const swapDetails = document.getElementById('swapDetails');
+      const entrySwapOriginalDates = document.getElementById('entrySwapOriginalDates');
 
-  const entryIsWorkOverride = document.getElementById('entryIsWorkOverride');
-  const workOverrideDetails = document.getElementById('workOverrideDetails');
-  const entryOverrideHours = document.getElementById('entryOverrideHours');
+      const entryIsWorkOverride = document.getElementById('entryIsWorkOverride');
+      const workOverrideDetails = document.getElementById('workOverrideDetails');
+      const entryOverrideHours = document.getElementById('entryOverrideHours');
 
-  // toggle swap UI
-  if (entryIsSwap && swapDetails) {
-    entryIsSwap.addEventListener('change', () => {
-      swapDetails.style.display = entryIsSwap.checked ? 'block' : 'none';
-    });
-  }
-
-  // toggle work-override UI
-  if (entryIsWorkOverride && workOverrideDetails) {
-    entryIsWorkOverride.addEventListener('change', () => {
-      workOverrideDetails.style.display = entryIsWorkOverride.checked ? 'block' : 'none';
-      // update computed values when toggling
-      updateComputedValues();
-    });
-  }
-
-  if (entryEmployee) entryEmployee.addEventListener('change', updateComputedValues);
-  if (entryDate) entryDate.addEventListener('change', updateComputedValues);
-  if (entryStartTime) entryStartTime.addEventListener('change', updateComputedValues);
-  if (entryEndTime) entryEndTime.addEventListener('change', updateComputedValues);
-  if (entryStatus) entryStatus.addEventListener('change', updateComputedValues);
-
-  const form = document.getElementById('attendanceForm');
-  if (!form) return;
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const employeeId = Number(document.getElementById('entryEmployee').value);
-    const dateStr = document.getElementById('entryDate').value;
-    const startTime = document.getElementById('entryStartTime').value;
-    const endTime = document.getElementById('entryEndTime').value;
-    const status = document.getElementById('entryStatus').value;
-    const notes = document.getElementById('entryNotes').value || '';
-    const isSwap = document.getElementById('entryIsSwap') && document.getElementById('entryIsSwap').checked;
-    const swapOriginalsRaw = document.getElementById('entrySwapOriginalDates') ? document.getElementById('entrySwapOriginalDates').value.trim() : '';
-    const isWorkOverride = document.getElementById('entryIsWorkOverride') && document.getElementById('entryIsWorkOverride').checked;
-    const overrideHoursRaw = document.getElementById('entryOverrideHours') ? document.getElementById('entryOverrideHours').value.trim() : '';
-
-    if (!employeeId || !dateStr) { showToast('Select employee and date', 'error'); return; }
-    const employee = employees.find(e => Number(e.id) === Number(employeeId));
-    if (!employee) { showToast('Employee not found', 'error'); return; }
-
-    // If work-override is set and overrideHours provided, use that as expectedHours.
-    let expectedHours = getExpectedHours(employee, dateStr); // this function now respects any saved override in attendanceLog
-    if (isWorkOverride) {
-      const parsed = parseFloat(overrideHoursRaw);
-      if (!isNaN(parsed) && parsed >= 0) {
-        expectedHours = parsed;
-      } else {
-        // If no number given, try to infer from a typical workday: pick first non-off day in schedule
-        const scheduleDays = Object.values(employee.schedule || {});
-        const sample = scheduleDays.find(d => d !== 'off' && d && d.net_hours);
-        expectedHours = sample ? (sample.net_hours || 0) : expectedHours;
+      // toggle swap UI
+      if (entryIsSwap && swapDetails) {
+        entryIsSwap.addEventListener('change', () => {
+          swapDetails.style.display = entryIsSwap.checked ? 'block' : 'none';
+        });
       }
-    }
 
-    const breakMins = getBreakMinutes(employee, dateStr);
-    let netHours = 0;
-    if (status !== 'Absent' && status !== 'Leave') {
-      const total = calculateTimeDiff(startTime, endTime);
-      netHours = Math.max(0, total - (breakMins / 60));
-    }
+      // toggle work-override UI
+      if (entryIsWorkOverride && workOverrideDetails) {
+        entryIsWorkOverride.addEventListener('change', () => {
+          workOverrideDetails.style.display = entryIsWorkOverride.checked ? 'block' : 'none';
+          // update computed values when toggling
+          updateComputedValues();
+        });
+      }
 
-    const overtimeHours = Math.max(0, netHours - expectedHours);
+      if (entryEmployee) entryEmployee.addEventListener('change', updateComputedValues);
+      if (entryDate) entryDate.addEventListener('change', updateComputedValues);
+      if (entryStartTime) entryStartTime.addEventListener('change', updateComputedValues);
+      if (entryEndTime) entryEndTime.addEventListener('change', updateComputedValues);
+      if (entryStatus) entryStatus.addEventListener('change', updateComputedValues);
+      if (entryOverrideHours) entryOverrideHours.addEventListener('input', updateComputedValues);
 
-    const existing = attendanceLog.find(a => a.date === dateStr && Number(a.employee_id) === Number(employeeId));
-    const id = existing ? existing.id : nextAttendanceId++;
+      const form = document.getElementById('attendanceForm');
+      if (!form) return;
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const employeeId = Number(document.getElementById('entryEmployee').value);
+        const dateStr = document.getElementById('entryDate').value;
+        const startTime = document.getElementById('entryStartTime').value;
+        const endTime = document.getElementById('entryEndTime').value;
+        const status = document.getElementById('entryStatus').value;
+        const notes = document.getElementById('entryNotes').value || '';
+        const isSwap = document.getElementById('entryIsSwap') && document.getElementById('entryIsSwap').checked;
+        const swapOriginalsRaw = document.getElementById('entrySwapOriginalDates') ? document.getElementById('entrySwapOriginalDates').value.trim() : '';
+        const isWorkOverride = document.getElementById('entryIsWorkOverride') && document.getElementById('entryIsWorkOverride').checked;
+        const overrideHoursRaw = document.getElementById('entryOverrideHours') ? document.getElementById('entryOverrideHours').value.trim() : '';
 
-    const entry = {
-      id,
-      date: dateStr,
-      employee_id: Number(employeeId),
-      employee_name: employee.name,
-      role: employee.role,
-      start_time: startTime || '',
-      end_time: endTime || '',
-      break_mins: breakMins,
-      net_hours: parseFloat(netHours.toFixed(2)),
-      expected_hours: expectedHours,
-      status,
-      overtime_hours: parseFloat(overtimeHours.toFixed(2)),
-      notes,
-      last_modified: new Date().toISOString(),
-      recorded_by: currentUser,
-      is_swap_day: !!isSwap,
-      swapped_from: swapOriginalsRaw || '',
-      is_work_override: !!isWorkOverride,
-      override_expected_hours: (isWorkOverride && overrideHoursRaw) ? Number(overrideHoursRaw) : (isWorkOverride ? expectedHours : undefined)
-    };
+        if (!employeeId || !dateStr) { showToast('Select employee and date', 'error'); return; }
+        const employee = employees.find(e => Number(e.id) === Number(employeeId));
+        if (!employee) { showToast('Employee not found', 'error'); return; }
 
-    // helper: process swap originals locally
-    async function processSwapOriginalDatesLocally(origDates, targetDate) {
-      if (!Array.isArray(origDates) || origDates.length === 0) return;
-      origDates.forEach(orig => {
-        orig = orig.trim();
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(orig)) return;
-        const existingOrig = attendanceLog.find(a => a.date === orig && Number(a.employee_id) === Number(employeeId));
-        if (existingOrig) {
-          if (existingOrig.status === 'Present') {
-            existingOrig.notes = (existingOrig.notes || '') + ` | Swap attempted: worked on ${targetDate}; original already Present.`;
+        // If work-override is set and overrideHours provided, use that as expectedHours.
+        let expectedHours = getExpectedHours(employee, dateStr); // this function now respects any saved override in attendanceLog
+        if (isWorkOverride) {
+          const parsed = parseFloat(overrideHoursRaw);
+          if (!isNaN(parsed) && parsed >= 0) {
+            expectedHours = parsed;
           } else {
-            existingOrig.status = 'Leave';
-            existingOrig.net_hours = 0;
-            existingOrig.expected_hours = getExpectedHours(employee, orig);
-            existingOrig.break_mins = getBreakMinutes(employee, orig);
-            existingOrig.notes = (existingOrig.notes || '') + ` | Marked Leave due to swap: worked on ${targetDate}.`;
-            existingOrig.last_modified = new Date().toISOString();
+            // If no number given, try to infer from a typical workday: pick first non-off day in schedule
+            const scheduleDays = Object.values(employee.schedule || {});
+            const sample = scheduleDays.find(d => d !== 'off' && d && d.net_hours);
+            expectedHours = sample ? (sample.net_hours || 0) : expectedHours;
           }
-        } else {
-          const newId = nextAttendanceId++;
-          const newEntry = {
-            id: newId,
-            date: orig,
-            employee_id: Number(employeeId),
-            employee_name: employee.name,
-            role: employee.role,
-            start_time: '',
-            end_time: '',
-            break_mins: getBreakMinutes(employee, orig),
-            net_hours: 0,
-            expected_hours: getExpectedHours(employee, orig),
-            status: 'Leave',
-            overtime_hours: 0,
-            notes: `Marked Leave due to swap: worked on ${targetDate}.`,
-            last_modified: new Date().toISOString(),
-            recorded_by: currentUser
-          };
-          attendanceLog.push(newEntry);
         }
-      });
-    }
 
-    // Save main entry (firebase or local)
-    if (hasFirebase && firebaseConnected) {
-      try {
-        await db.collection('attendance').doc(String(id)).set(entry);
+        const breakMins = getBreakMinutes(employee, dateStr);
+        let netHours = 0;
+        if (status !== 'Absent' && status !== 'Leave') {
+          const total = calculateTimeDiff(startTime, endTime);
+          netHours = Math.max(0, total - (breakMins / 60));
+        }
 
-        // handle swap originals in firestore (if any)
-        if (isSwap && swapOriginalsRaw) {
-          const origDates = swapOriginalsRaw.split(',').map(s => s.trim()).filter(s => s);
-          for (const orig of origDates) {
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(orig)) continue;
-            const q = await db.collection('attendance').where('employee_id', '==', Number(employeeId)).where('date', '==', orig).limit(1).get();
-            if (!q.empty) {
-              const doc = q.docs[0];
-              const existingOrig = doc.data();
+        const overtimeHours = Math.max(0, netHours - expectedHours);
+
+        const existing = attendanceLog.find(a => a.date === dateStr && Number(a.employee_id) === Number(employeeId));
+        const id = existing ? existing.id : nextAttendanceId++;
+
+        const entry = {
+          id,
+          date: dateStr,
+          employee_id: Number(employeeId),
+          employee_name: employee.name,
+          role: employee.role,
+          start_time: startTime || '',
+          end_time: endTime || '',
+          break_mins: breakMins,
+          net_hours: parseFloat(netHours.toFixed(2)),
+          expected_hours: expectedHours,
+          status,
+          overtime_hours: parseFloat(overtimeHours.toFixed(2)),
+          notes,
+          last_modified: new Date().toISOString(),
+          recorded_by: currentUser,
+          is_swap_day: !!isSwap,
+          swapped_from: swapOriginalsRaw || '',
+          is_work_override: !!isWorkOverride,
+          override_expected_hours: (isWorkOverride && overrideHoursRaw) ? Number(overrideHoursRaw) : (isWorkOverride ? expectedHours : undefined)
+        };
+
+        // sanitize before Firestore write (removes undefined recursively)
+        const sanitizedEntry = sanitizeForFirestore(entry);
+
+        // helper: process swap originals locally
+        async function processSwapOriginalDatesLocally(origDates, targetDate) {
+          if (!Array.isArray(origDates) || origDates.length === 0) return;
+          origDates.forEach(orig => {
+            orig = orig.trim();
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(orig)) return;
+            const existingOrig = attendanceLog.find(a => a.date === orig && Number(a.employee_id) === Number(employeeId));
+            if (existingOrig) {
               if (existingOrig.status === 'Present') {
-                await doc.ref.update({
-                  notes: (existingOrig.notes || '') + ` | Swap attempted: worked on ${dateStr}; original already Present.`,
-                  last_modified: new Date().toISOString()
-                });
+                existingOrig.notes = (existingOrig.notes || '') + ` | Swap attempted: worked on ${targetDate}; original already Present.`;
               } else {
-                await doc.ref.update({
-                  status: 'Leave',
-                  net_hours: 0,
-                  expected_hours: getExpectedHours(employee, orig),
-                  break_mins: getBreakMinutes(employee, orig),
-                  notes: (existingOrig.notes || '') + ` | Marked Leave due to swap: worked on ${dateStr}.`,
-                  last_modified: new Date().toISOString()
-                });
+                existingOrig.status = 'Leave';
+                existingOrig.net_hours = 0;
+                existingOrig.expected_hours = getExpectedHours(employee, orig);
+                existingOrig.break_mins = getBreakMinutes(employee, orig);
+                existingOrig.notes = (existingOrig.notes || '') + ` | Marked Leave due to swap: worked on ${targetDate}.`;
+                existingOrig.last_modified = new Date().toISOString();
               }
             } else {
-              const newDocId = String(nextAttendanceId++);
-              await db.collection('attendance').doc(newDocId).set({
-                id: Number(newDocId),
+              const newId = nextAttendanceId++;
+              const newEntry = {
+                id: newId,
                 date: orig,
                 employee_id: Number(employeeId),
                 employee_name: employee.name,
@@ -941,40 +983,91 @@ if (window.__ATTENDANCE_APP_LOADED) {
                 expected_hours: getExpectedHours(employee, orig),
                 status: 'Leave',
                 overtime_hours: 0,
-                notes: `Marked Leave due to swap: worked on ${dateStr}.`,
+                notes: `Marked Leave due to swap: worked on ${targetDate}.`,
                 last_modified: new Date().toISOString(),
                 recorded_by: currentUser
-              });
+              };
+              attendanceLog.push(newEntry);
             }
-          }
+          });
         }
 
-        showToast('Attendance saved', 'success');
-      } catch (err) {
-        console.error('Firestore attendance write failed', err);
-        showToast('Save failed: ' + (err.message || err), 'error');
-      }
-    } else {
-      // local branch
-      const idx = attendanceLog.findIndex(a => a.id === id);
-      if (idx >= 0) attendanceLog[idx] = entry; else attendanceLog.push(entry);
+        // Save main entry (firebase or local)
+        if (hasFirebase && firebaseConnected) {
+          try {
+            await db.collection('attendance').doc(String(id)).set(sanitizedEntry);
 
-      // if swap-day, process originals
-      if (isSwap && swapOriginalsRaw) {
-        const origDates = swapOriginalsRaw.split(',').map(s => s.trim()).filter(s => s);
-        await processSwapOriginalDatesLocally(origDates, dateStr);
-      }
+            // handle swap originals in firestore (if any)
+            if (isSwap && swapOriginalsRaw) {
+              const origDates = swapOriginalsRaw.split(',').map(s => s.trim()).filter(s => s);
+              for (const orig of origDates) {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(orig)) continue;
+                const q = await db.collection('attendance').where('employee_id', '==', Number(employeeId)).where('date', '==', orig).limit(1).get();
+                if (!q.empty) {
+                  const doc = q.docs[0];
+                  const existingOrig = doc.data();
+                  if (existingOrig.status === 'Present') {
+                    await doc.ref.update({
+                      notes: (existingOrig.notes || '') + ` | Swap attempted: worked on ${dateStr}; original already Present.`,
+                      last_modified: new Date().toISOString()
+                    });
+                  } else {
+                    await doc.ref.update(sanitizeForFirestore({
+                      status: 'Leave',
+                      net_hours: 0,
+                      expected_hours: getExpectedHours(employee, orig),
+                      break_mins: getBreakMinutes(employee, orig),
+                      notes: (existingOrig.notes || '') + ` | Marked Leave due to swap: worked on ${dateStr}.`,
+                      last_modified: new Date().toISOString()
+                    }));
+                  }
+                } else {
+                  const newDocId = String(nextAttendanceId++);
+                  await db.collection('attendance').doc(newDocId).set(sanitizeForFirestore({
+                    id: Number(newDocId),
+                    date: orig,
+                    employee_id: Number(employeeId),
+                    employee_name: employee.name,
+                    role: employee.role,
+                    start_time: '',
+                    end_time: '',
+                    break_mins: getBreakMinutes(employee, orig),
+                    net_hours: 0,
+                    expected_hours: getExpectedHours(employee, orig),
+                    status: 'Leave',
+                    overtime_hours: 0,
+                    notes: `Marked Leave due to swap: worked on ${dateStr}.`,
+                    last_modified: new Date().toISOString(),
+                    recorded_by: currentUser
+                  }));
+                }
+              }
+            }
 
-      renderDashboard();
-      if (currentEmployee) renderEmployeeDetail(currentEmployee);
-      showToast('Attendance saved (local)', 'success');
-    }
+            showToast('Attendance saved', 'success');
+          } catch (err) {
+            console.error('Firestore attendance write failed', err);
+            showToast('Save failed: ' + (err.message || err), 'error');
+          }
+        } else {
+          // local branch
+          const idx = attendanceLog.findIndex(a => a.id === id);
+          if (idx >= 0) attendanceLog[idx] = entry; else attendanceLog.push(entry);
 
-    closeAttendanceModal();
-  });
-})();
+          // if swap-day, process originals
+          if (isSwap && swapOriginalsRaw) {
+            const origDates = swapOriginalsRaw.split(',').map(s => s.trim()).filter(s => s);
+            await processSwapOriginalDatesLocally(origDates, dateStr);
+          }
 
+          renderDashboard();
+          if (currentEmployee) renderEmployeeDetail(currentEmployee);
+          showToast('Attendance saved (local)', 'success');
+        }
 
+        closeAttendanceModal();
+      });
+    })();
 
     (function attachDailyLabHandler() {
       const laborForm = document.getElementById('dailyLaborForm');
@@ -994,7 +1087,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
         const entry = { id, date, name, wage, hours, total_pay: totalPay, notes, created_date: new Date().toISOString(), created_by: currentUser };
         if (hasFirebase && firebaseConnected) {
           try { 
-            await db.collection('dailyLabor').doc(String(id)).set(entry); 
+            await db.collection('dailyLabor').doc(String(id)).set(sanitizeForFirestore(entry)); 
             showToast('Daily labor saved', 'success');
           }
           catch (err) { 
@@ -1114,7 +1207,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
         const entry = { id, employee_id, amount, amount_deducted: 0, reason, date_given, status: 'Pending', created_by: currentUser };
         if (hasFirebase && firebaseConnected) {
           try { 
-            await db.collection('advances').doc(String(id)).set(entry); 
+            await db.collection('advances').doc(String(id)).set(sanitizeForFirestore(entry)); 
             showToast('Advance saved', 'success');
           }
           catch (err) { 
@@ -1201,12 +1294,12 @@ if (window.__ATTENDANCE_APP_LOADED) {
           
           INITIAL_EMPLOYEES.forEach(emp => {
             const docRef = db.collection('employees').doc(String(emp.id));
-            batch.set(docRef, emp);
+            batch.set(docRef, sanitizeForFirestore(emp));
           });
           
           INITIAL_ATTENDANCE.forEach(att => {
             const docRef = db.collection('attendance').doc(String(att.id));
-            batch.set(docRef, att);
+            batch.set(docRef, sanitizeForFirestore(att));
           });
           
           await batch.commit();
@@ -1285,7 +1378,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
         return;
       }
       try {
-        await db.collection(collectionName).doc(String(id)).set(data);
+        await db.collection(collectionName).doc(String(id)).set(sanitizeForFirestore(data));
       } catch (err) {
         console.error('Firestore write error', err);
         showToast('Save failed: ' + (err.message || err), 'error');
@@ -1304,6 +1397,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
       catch (err) { console.error('Firestore delete failed', err); showToast('Delete failed', 'error'); }
     }
 
+    // Updated: populate swap/override fields when editing
     window.openEditModal = function (attendanceId) {
       const record = attendanceLog.find(a => Number(a.id) === Number(attendanceId));
       if (!record) return showToast('Record not found', 'error');
@@ -1315,8 +1409,38 @@ if (window.__ATTENDANCE_APP_LOADED) {
         document.getElementById('entryEndTime').value = record.end_time || '';
         document.getElementById('entryStatus').value = record.status || 'Present';
         document.getElementById('entryNotes').value = record.notes || '';
+
+        // swap fields
+        const isSwapEl = document.getElementById('entryIsSwap');
+        const swapTxt = document.getElementById('entrySwapOriginalDates');
+        if (isSwapEl) {
+          isSwapEl.checked = !!record.is_swap_day;
+          if (isSwapEl.checked && swapTxt) {
+            swapTxt.value = record.swapped_from || '';
+            document.getElementById('swapDetails').style.display = 'block';
+          } else if (swapTxt) {
+            swapTxt.value = '';
+            document.getElementById('swapDetails').style.display = 'none';
+          }
+        }
+
+        // work-override fields
+        const isWorkOverrideEl = document.getElementById('entryIsWorkOverride');
+        const overrideHoursEl = document.getElementById('entryOverrideHours');
+        if (isWorkOverrideEl) {
+          isWorkOverrideEl.checked = !!record.is_work_override;
+          if (isWorkOverrideEl.checked) {
+            document.getElementById('workOverrideDetails').style.display = 'block';
+            if (overrideHoursEl) overrideHoursEl.value = (typeof record.override_expected_hours !== 'undefined' && record.override_expected_hours !== null) ? record.override_expected_hours : '';
+          } else {
+            document.getElementById('workOverrideDetails').style.display = 'none';
+            if (overrideHoursEl) overrideHoursEl.value = '';
+          }
+        }
+
+        // update computed UI
         updateComputedValues();
-      }, 100);
+      }, 120);
     };
 
     window.openDeleteModal = function (attendanceId) {
