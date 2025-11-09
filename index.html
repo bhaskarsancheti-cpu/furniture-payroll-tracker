@@ -204,36 +204,54 @@
   </div>
 
   <!-- Modals -->
-  <div id="attendanceModal" class="modal">
-    <div class="modal-content">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-        <h3 style="margin:0">Add Attendance</h3>
-        <button onclick="closeAttendanceModal()" class="close-btn">✕</button>
-      </div>
-      <form id="attendanceForm">
-        <select id="entryEmployee" class="form-control" required></select>
-        <input id="entryDate" type="date" class="form-control" required>
-        <select id="entryStatus" class="form-control">
-          <option value="Present">Present</option>
-          <option value="Half-day">Half-day</option>
-          <option value="Leave">Leave</option>
-          <option value="Absent">Absent</option>
-        </select>
-        <input id="entryStartTime" type="time" class="form-control" placeholder="Start Time">
-        <input id="entryEndTime" type="time" class="form-control" placeholder="End Time">
-        <input id="entryNotes" class="form-control" type="text" placeholder="Notes (optional)">
-        <div style="font-size:13px;color:var(--muted);margin:8px 0">
-          Break: <span id="computedBreak">30 mins</span> • 
-          Expected: <span id="computedExpectedHours">0 hrs</span> • 
-          Net: <span id="computedNetHours">0 hrs</span>
-        </div>
-        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
-          <button class="btn" type="submit">Save Attendance</button>
-          <button class="btn secondary" type="button" onclick="closeAttendanceModal()">Cancel</button>
-        </div>
-      </form>
+<!-- START: attendanceModal (REPLACE existing attendanceModal block with this) -->
+<div id="attendanceModal" class="modal">
+  <div class="modal-content">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h3 style="margin:0">Add Attendance</h3>
+      <button onclick="closeAttendanceModal()" class="close-btn">✕</button>
     </div>
+    <form id="attendanceForm">
+      <select id="entryEmployee" class="form-control" required></select>
+      <input id="entryDate" type="date" class="form-control" required>
+      <select id="entryStatus" class="form-control">
+        <option value="Present">Present</option>
+        <option value="Half-day">Half-day</option>
+        <option value="Leave">Leave</option>
+        <option value="Absent">Absent</option>
+      </select>
+      <input id="entryStartTime" type="time" class="form-control" placeholder="Start Time">
+      <input id="entryEndTime" type="time" class="form-control" placeholder="End Time">
+      <input id="entryNotes" class="form-control" type="text" placeholder="Notes (optional)">
+
+      <!-- Swap-day UI: visible only when checkbox checked -->
+      <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
+        <input id="entryIsSwap" type="checkbox" />
+        <label for="entryIsSwap" style="font-size:13px;color:#333">This attendance is a <strong>swapped day</strong> — employee is working on an off day (swap)</label>
+      </div>
+
+      <div id="swapDetails" style="display:none;margin-top:8px">
+        <div style="font-size:13px;color:var(--muted);margin-bottom:8px">
+          If this is a swapped day, list the original date(s) the employee will not attend (comma separated, <code>YYYY-MM-DD</code>).
+          The app will create/update those original date entries as <strong>Leave</strong> (unless they already have Present).
+        </div>
+        <textarea id="entrySwapOriginalDates" class="form-control" placeholder="e.g. 2025-11-05,2025-11-06"></textarea>
+      </div>
+
+      <div style="font-size:13px;color:var(--muted);margin:8px 0">
+        Break: <span id="computedBreak">30 mins</span> • 
+        Expected: <span id="computedExpectedHours">0 hrs</span> • 
+        Net: <span id="computedNetHours">0 hrs</span>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+        <button class="btn" type="submit">Save Attendance</button>
+        <button class="btn secondary" type="button" onclick="closeAttendanceModal()">Cancel</button>
+      </div>
+    </form>
   </div>
+</div>
+<!-- END: attendanceModal -->
+
 
   <div id="addAdvanceModal" class="modal">
     <div class="modal-content">
