@@ -220,16 +220,16 @@
         <option value="Leave">Leave</option>
         <option value="Absent">Absent</option>
       </select>
+
       <input id="entryStartTime" type="time" class="form-control" placeholder="Start Time">
       <input id="entryEndTime" type="time" class="form-control" placeholder="End Time">
       <input id="entryNotes" class="form-control" type="text" placeholder="Notes (optional)">
 
-      <!-- Swap-day UI: visible only when checkbox checked -->
+      <!-- Swap-day UI -->
       <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
         <input id="entryIsSwap" type="checkbox" />
         <label for="entryIsSwap" style="font-size:13px;color:#333">This attendance is a <strong>swapped day</strong> — employee is working on an off day (swap)</label>
       </div>
-
       <div id="swapDetails" style="display:none;margin-top:8px">
         <div style="font-size:13px;color:var(--muted);margin-bottom:8px">
           If this is a swapped day, list the original date(s) the employee will not attend (comma separated, <code>YYYY-MM-DD</code>).
@@ -238,11 +238,24 @@
         <textarea id="entrySwapOriginalDates" class="form-control" placeholder="e.g. 2025-11-05,2025-11-06"></textarea>
       </div>
 
+      <!-- Work-override UI (for working Sat/Sun or special working date) -->
+      <div style="margin-top:10px;display:flex;align-items:center;gap:8px">
+        <input id="entryIsWorkOverride" type="checkbox" />
+        <label for="entryIsWorkOverride" style="font-size:13px;color:#333">Treat this date as a <strong>working day override</strong> (use when Sat/Sun or off-day becomes a working day)</label>
+      </div>
+      <div id="workOverrideDetails" style="display:none;margin-top:8px">
+        <div style="font-size:13px;color:var(--muted);margin-bottom:8px">
+          Optionally enter the expected working hours for this date. If left blank the app will use the employee's typical day hours (if available).
+        </div>
+        <input id="entryOverrideHours" class="form-control" type="number" min="0" step="0.5" placeholder="Override expected hours (e.g. 8)">
+      </div>
+
       <div style="font-size:13px;color:var(--muted);margin:8px 0">
         Break: <span id="computedBreak">30 mins</span> • 
         Expected: <span id="computedExpectedHours">0 hrs</span> • 
         Net: <span id="computedNetHours">0 hrs</span>
       </div>
+
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
         <button class="btn" type="submit">Save Attendance</button>
         <button class="btn secondary" type="button" onclick="closeAttendanceModal()">Cancel</button>
