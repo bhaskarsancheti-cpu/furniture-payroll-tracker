@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Attendance & Payroll Tracker</title>
+
+  <!-- Firebase SDKs (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+
+  <style>
+    :root{--bg:#faf9f7;--card:#fff;--muted:#666;--accent:#2c6f6f;--danger:#e74c3c;--success:#27ae60;--warning:#f39c12}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Inter,system-ui,sans-serif;margin:0;background:var(--bg);color:#111;line-height:1.6}
+    .app-container{max-width:1200px;margin:24px auto;padding:20px}
+    .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:12px}
+    .header>div:first-child{font-size:24px;font-weight:700}
+    .tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+    .tab{background:var(--card);padding:10px 16px;border-radius:8px;cursor:pointer;transition:all .2s;border:1px solid #e0e0e0}
+    .tab:hover{background:#f5f5f5}
+    .tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .tab-content{display:none}
+    .tab-content.active{display:block}
+    .btn{background:var(--accent);color:#fff;border:none;padding:10px 16px;border-radius:6px;cursor:pointer;font-size:14px;transition:all .2s}
+    .btn:hover{opacity:0.9}
+    .btn.secondary{background:#eee;color:#111}
+    .btn.danger{background:var(--danger)}
+    .form-control{padding:10px;border-radius:6px;border:1px solid #ddd;width:100%;font-size:14px;margin-bottom:8px}
+    .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);z-index:1000}
+    .modal.active{display:flex}
+    .modal-content{width:680px;max-width:95%;background:#fff;border-radius:12px;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,0.2);max-height:90vh;overflow-y:auto}
+    .toast{position:fixed;right:20px;bottom:20px;padding:12px 18px;border-radius:8px;background:var(--success);color:#fff;display:none;z-index:2000;box-shadow:0 4px 12px rgba(0,0,0,0.15)}
+    .toast.show{display:block}
+    .employee-card{background:var(--card);border:1px solid #e0e0e0;border-radius:10px;padding:16px;margin-bottom:12px;cursor:pointer;transition:all .2s}
+    .employee-card:hover{box-shadow:0 4px 12px rgba(0,0,0,0.1);transform:translateY(-2px)}
+    .employee-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+    .employee-name{font-size:18px;font-weight:700;color:#111}
+    .employee-role{font-size:13px;color:var(--muted)}
+    .employee-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:14px}
+    .stat-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0f0f0}
+    .stat-row:last-child{border-bottom:none}
+    .stat-row-label{color:var(--muted)}
+    .stat-row-value{font-weight:600}
+    .calendar-day-header{font-weight:700;text-align:center;padding:8px;background:#f5f5f5;border-radius:4px;font-size:12px}
+    #employeeCalendar{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:12px}
+    .calendar-day{padding:12px;text-align:center;border-radius:6px;font-size:14px;font-weight:600;border:1px solid #e0e0e0}
+    .calendar-day.empty{border:none}
+    .calendar-day.default{background:#fff}
+    .calendar-day.weekend{background:#f5f5f5;color:#999}
+    .calendar-day.present{background:#d4edda;color:#155724}
+    .calendar-day.overtime{background:#fff3cd;color:#856404}
+    .calendar-day.absent{background:#f8d7da;color:#721c24}
+    .calendar-day.leave{background:#d1ecf1;color:#0c5460}
+    .attendance-item{background:var(--card);border:1px solid #e0e0e0;border-radius:8px;padding:14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+    .attendance-date{font-weight:700;min-width:90px}
+    .attendance-details{flex:1}
+    .attendance-time{font-size:13px;color:var(--muted)}
+    .modified-badge{font-size:11px;background:#ffc107;color:#fff;padding:2px 6px;border-radius:4px;margin-left:8px}
+    .status-dropdown{position:relative}
+    .status-badge{display:inline-block;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer}
+    .status-badge.status-present{background:#d4edda;color:#155724}
+    .status-badge.status-halfday{background:#fff3cd;color:#856404}
+    .status-badge.status-leave{background:#d1ecf1;color:#0c5460}
+    .status-badge.status-absent{background:#f8d7da;color:#721c24}
+    .status-badge.status-overtime{background:#ffe5b4;color:#996515}
+    .action-icons{display:flex;gap:8px}
+    .icon-btn{background:none;border:none;font-size:16px;cursor:pointer;padding:4px 8px;border-radius:4px;transition:all .2s}
+    .icon-btn.edit:hover{background:#e3f2fd}
+    .icon-btn.delete:hover{background:#ffebee}
+    .schedule-info{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:12px 0;padding:12px;background:#f9f9f9;border-radius:8px}
+    .schedule-day{font-size:13px}
+    .payroll-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px}
+    .payroll-row:last-child{border-bottom:2px solid var(--accent);font-weight:700;font-size:16px}
+    .close-btn{background:none;border:none;font-size:24px;cursor:pointer;color:#999}
+    .close-btn:hover{color:#333}
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    table th,table td{padding:12px;text-align:left;border-bottom:1px solid #e0e0e0;font-size:14px}
+    table th{background:#f5f5f5;font-weight:700}
+    table tr:hover{background:#fafafa}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <div class="header">
+      <div>Attendance & Payroll Tracker</div>
+      <div>
+        <label for="monthYear" style="color:#666;font-size:13px;margin-right:8px">Month:</label>
+        <input id="monthYear" type="month" class="form-control" style="width:150px;display:inline-block">
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" data-tab="dashboard">Dashboard</div>
+      <div class="tab" data-tab="employees">Employees</div>
+      <div class="tab" data-tab="employee-management">Employee Management</div>
+      <div class="tab" data-tab="daily-labor">Daily Labour</div>
+      <div class="tab" data-tab="advances">Advances</div>
+      <div class="tab" data-tab="summary">Monthly Summary</div>
+      <div class="tab" data-tab="export">Export/Backup</div>
+    </div>
+
+    <div id="dashboard" class="tab-content active">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:16px">
+        <div style="background:var(--card);padding:16px;border-radius:8px;border:1px solid #e0e0e0">
+          <div style="font-size:13px;color:var(--muted)">Total Payroll</div>
+          <div style="font-size:24px;font-weight:700" id="totalPayroll">₹0</div>
+        </div>
+        <div style="background:var(--card);padding:16px;border-radius:8px;border:1px solid #e0e0e0">
+          <div style="font-size:13px;color:var(--muted)">Attendance Rate</div>
+          <div style="font-size:24px;font-weight:700" id="attendanceRate">0%</div>
+        </div>
+        <div style="background:var(--card);padding:16px;border-radius:8px;border:1px solid #e0e0e0">
+          <div style="font-size:13px;color:var(--muted)">Total Hours</div>
+          <div style="font-size:24px;font-weight:700" id="totalHours">0</div>
+        </div>
+        <div style="background:var(--card);padding:16px;border-radius:8px;border:1px solid #e0e0e0">
+          <div style="font-size:13px;color:var(--muted)">Active Employees</div>
+          <div style="font-size:24px;font-weight:700" id="activeEmployees">0</div>
+        </div>
+      </div>
+      <div id="employeeCards"></div>
+    </div>
+
+    <div id="employees" class="tab-content">
+      <div id="employeesList">
+        <h3>Select an Employee</h3>
+        <div id="employeeSelectCards"></div>
+      </div>
+      <div id="employeeDetail" style="display:none">
+        <button class="btn secondary" onclick="showEmployeesList()">← Back to Employees</button>
+        <div id="employeeDetailHeader" style="margin:16px 0"></div>
+        <button class="btn" onclick="openAttendanceModal()">+ Add Attendance Entry</button>
+        <div id="employeeCalendar"></div>
+        <div id="attendanceRecords" style="margin-top:16px"></div>
+        <div id="employeePayrollSummary" style="margin-top:16px;background:var(--card);padding:16px;border-radius:8px;border:1px solid #e0e0e0"></div>
+      </div>
+    </div>
+
+    <div id="employee-management" class="tab-content">
+      <h3>Employee Management</h3>
+      <button class="btn" onclick="openAddEmployeeModal()">+ Add Employee</button>
+      <div id="employeesManagementTable" style="margin-top:16px"></div>
+    </div>
+
+    <div id="daily-labor" class="tab-content">
+      <h3>Daily Labour</h3>
+      <form id="dailyLaborForm" style="background:var(--card);padding:16px;border-radius:8px;border:1px solid #e0e0e0;margin-bottom:16px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <input id="laborDate" class="form-control" type="date" required>
+          <input id="laborName" class="form-control" type="text" placeholder="Name" required>
+          <input id="laborWage" class="form-control" type="number" placeholder="Daily Wage (₹)" value="750" required>
+          <input id="laborHours" class="form-control" type="number" placeholder="Hours" value="8" step="0.1" required>
+        </div>
+        <input id="laborNotes" class="form-control" type="text" placeholder="Notes (optional)">
+        <button class="btn" type="submit">Add Daily Labour</button>
+      </form>
+      <div id="dailyLaborTableBody"></div>
+      <div style="margin-top:16px;font-size:18px;font-weight:700">Total Labour Cost: <span id="totalLaborCost">₹0</span></div>
+    </div>
+
+    <div id="advances" class="tab-content">
+      <h3>Advances</h3>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+        <div style="display:flex;gap:8px">
+          <select id="advanceFilterEmployee" class="form-control" style="width:200px"></select>
+          <select id="advanceFilterStatus" class="form-control" style="width:150px">
+            <option value="">All Status</option>
+            <option>Pending</option>
+            <option>Partial</option>
+            <option>Settled</option>
+          </select>
+        </div>
+        <button class="btn" onclick="openAddAdvanceModal()">+ Add Advance</button>
+      </div>
+      <div id="advancesTableBody"></div>
+    </div>
+
+    <div id="summary" class="tab-content">
+      <h3>Monthly Summary</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Role</th>
+            <th>Expected Hours</th>
+            <th>Actual Hours</th>
+            <th>Base Salary</th>
+            <th>Deductions</th>
+            <th>Overtime Pay</th>
+            <th>Final Pay</th>
+          </tr>
+        </thead>
+        <tbody id="summaryTableBody"></tbody>
+      </table>
+    </div>
+
+    <div id="export" class="tab-content">
+      <h3>Export / Backup</h3>
+      <p style="margin-bottom:16px;color:var(--muted)">Download a JSON backup of all your data (employees, attendance, advances, daily labor).</p>
+      <button id="downloadBackupBtn" class="btn">Download JSON Backup</button>
+    </div>
+  </div>
+
+  <!-- Modals -->
+  <div id="attendanceModal" class="modal">
+    <div class="modal-content">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 style="margin:0">Add Attendance</h3>
+        <button onclick="closeAttendanceModal()" class="close-btn">✕</button>
+      </div>
+      <form id="attendanceForm">
+        <select id="entryEmployee" class="form-control" required></select>
+        <input id="entryDate" type="date" class="form-control" required>
+        <select id="entryStatus" class="form-control">
+          <option value="Present">Present</option>
+          <option value="Half-day">Half-day</option>
+          <option value="Leave">Leave</option>
+          <option value="Absent">Absent</option>
+        </select>
+        <input id="entryStartTime" type="time" class="form-control" placeholder="Start Time">
+        <input id="entryEndTime" type="time" class="form-control" placeholder="End Time">
+        <input id="entryNotes" class="form-control" type="text" placeholder="Notes (optional)">
+        <div style="font-size:13px;color:var(--muted);margin:8px 0">
+          Break: <span id="computedBreak">30 mins</span> • 
+          Expected: <span id="computedExpectedHours">0 hrs</span> • 
+          Net: <span id="computedNetHours">0 hrs</span>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+          <button class="btn" type="submit">Save Attendance</button>
+          <button class="btn secondary" type="button" onclick="closeAttendanceModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="addAdvanceModal" class="modal">
+    <div class="modal-content">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 style="margin:0">Add Advance</h3>
+        <button onclick="document.getElementById('addAdvanceModal').classList.remove('active')" class="close-btn">✕</button>
+      </div>
+      <form id="addAdvanceForm">
+        <select id="advanceEmployee" class="form-control" required></select>
+        <input id="advanceDate" type="date" class="form-control">
+        <input id="advanceAmount" type="number" class="form-control" placeholder="Amount (₹)" required>
+        <input id="advanceReason" class="form-control" type="text" placeholder="Reason (optional)">
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+          <button class="btn" type="submit">Add Advance</button>
+          <button class="btn secondary" type="button" onclick="document.getElementById('addAdvanceModal').classList.remove('active')">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="addEmployeeModal" class="modal">
+    <div class="modal-content">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 style="margin:0">Add Employee</h3>
+        <button onclick="closeAddEmployeeModal()" class="close-btn">✕</button>
+      </div>
+      <form id="addEmployeeForm">
+        <div class="form-grid">
+          <input id="empName" class="form-control" type="text" placeholder="Name" required>
+          <input id="empRole" class="form-control" type="text" placeholder="Role (e.g., Carpenter)" required>
+        </div>
+        <div class="form-grid">
+          <input id="empSalary" class="form-control" type="number" placeholder="Monthly Salary (₹)" required>
+          <input id="empPhone" class="form-control" type="text" placeholder="Phone (optional)">
+        </div>
+        <input id="empHireDate" class="form-control" type="date" placeholder="Hire Date" required>
+        
+        <h4 style="margin-top:16px;margin-bottom:8px">Weekly Schedule</h4>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Set work hours for each day (leave blank for off days)</div>
+        
+        <div style="display:grid;gap:8px">
+          <div style="display:grid;grid-template-columns:100px 1fr 1fr 80px;gap:8px;align-items:center">
+            <strong>Monday</strong>
+            <input id="monStart" class="form-control" type="time" placeholder="Start">
+            <input id="monEnd" class="form-control" type="time" placeholder="End">
+            <input id="monBreak" class="form-control" type="number" placeholder="Break" value="30">
+          </div>
+          <div style="display:grid;grid-template-columns:100px 1fr 1fr 80px;gap:8px;align-items:center">
+            <strong>Tuesday</strong>
+            <input id="tueStart" class="form-control" type="time">
+            <input id="tueEnd" class="form-control" type="time">
+            <input id="tueBreak" class="form-control" type="number" value="30">
+          </div>
+          <div style="display:grid;grid-template-columns:100px 1fr 1fr 80px;gap:8px;align-items:center">
+            <strong>Wednesday</strong>
+            <input id="wedStart" class="form-control" type="time">
+            <input id="wedEnd" class="form-control" type="time">
+            <input id="wedBreak" class="form-control" type="number" value="30">
+          </div>
+          <div style="display:grid;grid-template-columns:100px 1fr 1fr 80px;gap:8px;align-items:center">
+            <strong>Thursday</strong>
+            <input id="thuStart" class="form-control" type="time">
+            <input id="thuEnd" class="form-control" type="time">
+            <input id="thuBreak" class="form-control" type="number" value="30">
+          </div>
+          <div style="display:grid;grid-template-columns:100px 1fr 1fr 80px;gap:8px;align-items:center">
+            <strong>Friday</strong>
+            <input id="friStart" class="form-control" type="time">
+            <input id="friEnd" class="form-control" type="time">
+            <input id="friBreak" class="form-control" type="number" value="30">
+          </div>
+          <div style="display:grid;grid-template-columns:100px 1fr 1fr 80px;gap:8px;align-items:center">
+            <strong>Saturday</strong>
+            <input id="satStart" class="form-control" type="time">
+            <input id="satEnd" class="form-control" type="time">
+            <input id="satBreak" class="form-control" type="number" value="30">
+          </div>
+          <div style="display:grid;grid-template-columns:100px 1fr 1fr 80px;gap:8px;align-items:center">
+            <strong>Sunday</strong>
+            <input id="sunStart" class="form-control" type="time">
+            <input id="sunEnd" class="form-control" type="time">
+            <input id="sunBreak" class="form-control" type="number" value="30">
+          </div>
+        </div>
+        
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+          <button class="btn" type="submit">Add Employee</button>
+          <button class="btn secondary" type="button" onclick="closeAddEmployeeModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const m = document.getElementById('monthYear');
+    if (m) {
+      const now = new Date();
+      m.value = now.toISOString().slice(0,7);
+      m.addEventListener('change', function(){ if(window.renderDashboard) renderDashboard(); });
+    }
+
+    document.addEventListener('click', function(e){
+      const t = e.target.closest('.tab');
+      if(!t) return;
+      const name = t.dataset.tab;
+      document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));
+      t.classList.add('active');
+      const el = document.getElementById(name);
+      if (el) el.classList.add('active');
+      try { if (name === 'dashboard' && window.renderDashboard) window.renderDashboard(); } catch(e){}
+      try { if (name === 'employees' && window.renderEmployeeSelect) window.renderEmployeeSelect(); } catch(e){}
+      try { if (name === 'employee-management' && window.renderEmployeeManagement) window.renderEmployeeManagement(); } catch(e){}
+      try { if (name === 'daily-labor' && window.renderDailyLabor) window.renderDailyLabor(); } catch(e){}
+      try { if (name === 'advances' && window.renderAdvances) window.renderAdvances(); } catch(e){}
+      try { if (name === 'summary' && window.renderSummary) window.renderSummary(); } catch(e){}
+    });
+
+    function closeAddEmployeeModal() {
+      const modal = document.getElementById('addEmployeeModal');
+      if (modal) modal.classList.remove('active');
+      const form = document.getElementById('addEmployeeForm');
+      if (form) form.reset();
+    }
+    window.closeAddEmployeeModal = closeAddEmployeeModal;
+  </script>
+
+  <script src="./app.js"></script>
+</body>
+</html>
