@@ -21,8 +21,27 @@ if (window.__ATTENDANCE_APP_LOADED) {
     let db = null;
     let dataSeeded = false;
 
-    // Default grace minutes for shortfalls (can override per-employee with employee.grace_mins)
+    // Defaults & company policy constants
     const DEFAULT_GRACE_MINUTES = 60;
+    const COMPANY_PAID_HOLIDAYS = 4;
+
+    // Company default weekly schedule (fallback when employee schedule is 'off')
+    const COMPANY_DEFAULT_SCHEDULE = {
+      monday:    { start: "08:30", end: "17:00", break_mins: 30, net_hours: 8 },
+      tuesday:   { start: "08:30", end: "17:00", break_mins: 30, net_hours: 8 },
+      wednesday: { start: "08:30", end: "17:00", break_mins: 30, net_hours: 8 },
+      thursday:  { start: "08:30", end: "17:00", break_mins: 30, net_hours: 8 },
+      friday:    { start: "08:30", end: "17:00", break_mins: 30, net_hours: 8 },
+      saturday:  { start: "08:30", end: "17:00", break_mins: 30, net_hours: 8 }, // company may work Saturdays
+      sunday:    "off"
+    };
+
+    function getCompanyExpectedHoursForDate(dateStr) {
+      const dn = getDayName(dateStr);
+      const day = COMPANY_DEFAULT_SCHEDULE[dn];
+      if (!day || day === 'off') return 0;
+      return day.net_hours || 0;
+    }
 
     let employees = [
       {
@@ -54,7 +73,7 @@ if (window.__ATTENDANCE_APP_LOADED) {
         status: "Active",
         phone: "98765-43211",
         salary_history: [{ date: "2025-01-01", salary: 26000, reason: "Initial hire" }],
-        // you can set a per-employee grace_mins (e.g. 60)
+        // set grace minutes if you want per-employee override
         grace_mins: 60,
         schedule: {
           monday: { start: "08:30", end: "19:00", break_mins: 30, net_hours: 10 },
@@ -219,201 +238,169 @@ if (window.__ATTENDANCE_APP_LOADED) {
       }, 0);
     }
 
-// Company-wide paid holidays per month (change if policy changes)
-const COMPANY_PAID_HOLIDAYS = 4;
-
-function calculateEmployeeStats(employee, month) {
-  // 1) compute expected monthly hours from schedule / overrides for the month
-  let expectedHours = 0;
-  try {
-    const [y, m] = month.split('-').map(Number);
-    const lastDay = new Date(y, m, 0).getDate();
-    for (let d = 1; d <= lastDay; d++) {
-      const dateStr = `${month}-${String(d).padStart(2,'0')}`;
-      let perDayExpected = getExpectedHours(employee, dateStr); // respects per-date overrides
-      if (!perDayExpected || perDayExpected === 0) {
-        perDayExpected = getCompanyExpectedHoursForDate(dateStr); // fallback company schedule
-      }
-      expectedHours += Number(perDayExpected || 0);
-    }
-  } catch (err) {
-    expectedHours = employee.expected_monthly_hours || 0;
-  }
-
-  // Defensive: avoid divide-by-zero
-  const empSalary = Number(employee.salary_monthly || 0);
-  const hourlyRate = expectedHours > 0 ? (empSalary / expectedHours) : (empSalary / 192 || 0);
-
-  // Attendance for the employee in the month
-  const monthAttendance = filterAttendanceByMonth(month).filter(entry => Number(entry.employee_id) === Number(employee.id));
-  const attendanceByDate = {};
-  monthAttendance.forEach(a => { if (a && a.date) attendanceByDate[a.date] = a; });
-
-  let actualHours = 0, overtimeHours = 0, absenceHours = 0, presentDays = 0, absentDays = 0;
-  let totalDeductions = 0, totalOvertimePay = 0;
-
-  const graceMinutes = (typeof employee.grace_mins === 'number') ? employee.grace_mins : DEFAULT_GRACE_MINUTES;
-
-  // Company paid-holidays logic (reuse if present)
-  const explicitHolidayCount = monthAttendance.reduce((c, a) => {
-    if (!a) return c;
-    if (a.status === 'Holiday' || a.status === 'Swapped-off' || a.swap_compensated) return c + 1;
-    return c;
-  }, 0);
-  let remainingPaidHolidays = Math.max(0, COMPANY_PAID_HOLIDAYS - explicitHolidayCount);
-
-  // 2) Process explicit attendance entries
-  monthAttendance.forEach(entry => {
-    if (!entry) return;
-
-    // Compensated swaps / holidays — don't deduct
-    if (entry.swap_compensated || entry.status === 'Swapped-off' || entry.status === 'Holiday') {
-      return;
-    }
-
-    const dayExpected = Number(entry.expected_hours || getExpectedHours(employee, entry.date) || 0) || 0;
-    const dayNet = Number(entry.net_hours || 0);
-
-    if (entry.status === 'Present' || entry.status === 'Half-day') {
-      actualHours += dayNet;
-      presentDays++;
-
-      // If net > expected (true overtime beyond that day's expected) -> pay OT at hourlyRate * 1.5
-      if (dayNet > dayExpected) {
-        const ot = dayNet - dayExpected;
-        overtimeHours += ot;
-        totalOvertimePay += ot * hourlyRate * 1.5;
-      }
-
-      // If net < expected -> apply grace then deduce missing hours at hourlyRate
-      if (dayNet < dayExpected) {
-        const shortfall = dayExpected - dayNet; // hours
-        const shortfallMins = shortfall * 60;
-        if (shortfallMins > graceMinutes) {
-          const effectiveShortfall = (shortfallMins - graceMinutes) / 60;
-          const deduction = effectiveShortfall * hourlyRate;
-          totalDeductions += deduction;
-          absenceHours += effectiveShortfall;
+    // --------------------------
+    // Replacement calculateEmployeeStats
+    // --------------------------
+    function calculateEmployeeStats(employee, month) {
+      // 1) compute expected monthly hours from schedule / overrides for the month
+      let expectedHours = 0;
+      try {
+        const [y, m] = month.split('-').map(Number);
+        const lastDay = new Date(y, m, 0).getDate();
+        for (let d = 1; d <= lastDay; d++) {
+          const dateStr = `${month}-${String(d).padStart(2,'0')}`;
+          let perDayExpected = getExpectedHours(employee, dateStr); // respects per-date overrides
+          if (!perDayExpected || perDayExpected === 0) {
+            perDayExpected = getCompanyExpectedHoursForDate(dateStr); // fallback company schedule
+          }
+          expectedHours += Number(perDayExpected || 0);
         }
+      } catch (err) {
+        expectedHours = employee.expected_monthly_hours || 0;
       }
 
-      // Special-case Half-day: ensure minimum half-day deduction if policy requires (keeps previous behaviour)
-      if (entry.status === 'Half-day') {
-        const halfDeductionAmount = (empSalary / 30) / 2; // employer's defined half-day as half per-day money
-        // compute already applied shortfall deduction (if any)
-        // convert to equivalent rupees using hourlyRate
-        const shortfall = Math.max(0, dayExpected - dayNet);
-        const shortfallMins = shortfall * 60;
-        let shortfallDeduction = 0;
-        if (shortfallMins > graceMinutes) {
-          const eff = (shortfallMins - graceMinutes) / 60;
-          shortfallDeduction = eff * hourlyRate;
-        }
-        if (shortfallDeduction < halfDeductionAmount) {
-          totalDeductions += (halfDeductionAmount - shortfallDeduction);
-          absenceHours += (dayExpected * ((halfDeductionAmount - shortfallDeduction) / (empSalary / 30 || 1)));
-        }
-      }
+      // Defensive: avoid divide-by-zero
+      const empSalary = Number(employee.salary_monthly || 0);
+      const hourlyRate = expectedHours > 0 ? (empSalary / expectedHours) : (empSalary / 192 || 0);
 
-    } else if (entry.status === 'Absent' || entry.status === 'Leave') {
-      // Absent/Leave => full-day deduction based on hourlyRate * expected_hours (pay for that day removed)
-      const deduction = dayExpected * hourlyRate || (empSalary / 30);
-      totalDeductions += deduction;
-      absentDays++;
-      absenceHours += dayExpected || 0;
-    } else {
-      // Unknown statuses: treat missing net_hours on an expected day as absent
-      if (!entry.net_hours || entry.net_hours === 0) {
-        if (dayExpected > 0) {
+      // Attendance for the employee in the month
+      const monthAttendance = filterAttendanceByMonth(month).filter(entry => Number(entry.employee_id) === Number(employee.id));
+      const attendanceByDate = {};
+      monthAttendance.forEach(a => { if (a && a.date) attendanceByDate[a.date] = a; });
+
+      let actualHours = 0, overtimeHours = 0, absenceHours = 0, presentDays = 0, absentDays = 0;
+      let totalDeductions = 0, totalOvertimePay = 0;
+
+      const graceMinutes = (typeof employee.grace_mins === 'number') ? employee.grace_mins : DEFAULT_GRACE_MINUTES;
+
+      // Company paid-holidays logic (reuse if present)
+      const explicitHolidayCount = monthAttendance.reduce((c, a) => {
+        if (!a) return c;
+        if (a.status === 'Holiday' || a.status === 'Swapped-off' || a.swap_compensated) return c + 1;
+        return c;
+      }, 0);
+      let remainingPaidHolidays = Math.max(0, COMPANY_PAID_HOLIDAYS - explicitHolidayCount);
+
+      // 2) Process explicit attendance entries
+      monthAttendance.forEach(entry => {
+        if (!entry) return;
+
+        // Compensated swaps / holidays — don't deduct
+        if (entry.swap_compensated || entry.status === 'Swapped-off' || entry.status === 'Holiday') {
+          return;
+        }
+
+        const dayExpected = Number(entry.expected_hours || getExpectedHours(employee, entry.date) || 0) || 0;
+        const dayNet = Number(entry.net_hours || 0);
+
+        if (entry.status === 'Present' || entry.status === 'Half-day') {
+          actualHours += dayNet;
+          presentDays++;
+
+          // If net > expected (true overtime beyond that day's expected) -> pay OT at hourlyRate * 1.5
+          if (dayNet > dayExpected) {
+            const ot = dayNet - dayExpected;
+            overtimeHours += ot;
+            totalOvertimePay += ot * hourlyRate * 1.5;
+          }
+
+          // If net < expected -> apply grace then deduce missing hours at hourlyRate
+          if (dayNet < dayExpected) {
+            const shortfall = dayExpected - dayNet; // hours
+            const shortfallMins = shortfall * 60;
+            if (shortfallMins > graceMinutes) {
+              const effectiveShortfall = (shortfallMins - graceMinutes) / 60;
+              const deduction = effectiveShortfall * hourlyRate;
+              totalDeductions += deduction;
+              absenceHours += effectiveShortfall;
+            }
+          }
+
+          // Special-case Half-day: ensure minimum half-day deduction if policy requires (keeps previous behaviour)
+          if (entry.status === 'Half-day') {
+            const halfDeductionAmount = (empSalary / 30) / 2; // employer's defined half-day as half per-day money
+            // compute already applied shortfall deduction (if any)
+            const shortfall = Math.max(0, dayExpected - dayNet);
+            const shortfallMins = shortfall * 60;
+            let shortfallDeduction = 0;
+            if (shortfallMins > graceMinutes) {
+              const eff = (shortfallMins - graceMinutes) / 60;
+              shortfallDeduction = eff * hourlyRate;
+            }
+            if (shortfallDeduction < halfDeductionAmount) {
+              totalDeductions += (halfDeductionAmount - shortfallDeduction);
+              absenceHours += (dayExpected * ((halfDeductionAmount - shortfallDeduction) / (empSalary / 30 || 1)));
+            }
+          }
+
+        } else if (entry.status === 'Absent' || entry.status === 'Leave') {
+          // Absent/Leave => full-day deduction based on hourlyRate * expected_hours (pay for that day removed)
           const deduction = dayExpected * hourlyRate || (empSalary / 30);
           totalDeductions += deduction;
           absentDays++;
-          absenceHours += dayExpected;
-        }
-      } else {
-        actualHours += dayNet;
-      }
-    }
-  });
-
-  // 3) Days with NO attendance entry: treat as absent if expected (consume paid-holiday quota first)
-  try {
-    const [y, m] = month.split('-').map(Number);
-    const lastDay = new Date(y, m, 0).getDate();
-    for (let d = 1; d <= lastDay; d++) {
-      const dateStr = `${month}-${String(d).padStart(2,'0')}`;
-      if (attendanceByDate[dateStr]) continue; // already processed
-
-      let expected = getExpectedHours(employee, dateStr);
-      if (!expected || expected === 0) expected = getCompanyExpectedHoursForDate(dateStr);
-
-      if (expected > 0) {
-        if (remainingPaidHolidays > 0) {
-          remainingPaidHolidays--;
-          continue; // treat as paid holiday
+          absenceHours += dayExpected || 0;
         } else {
-          const deduction = expected * hourlyRate || (empSalary / 30);
-          totalDeductions += deduction;
-          absentDays++;
-          absenceHours += expected;
+          // Unknown statuses: treat missing net_hours on an expected day as absent
+          if (!entry.net_hours || entry.net_hours === 0) {
+            if (dayExpected > 0) {
+              const deduction = dayExpected * hourlyRate || (empSalary / 30);
+              totalDeductions += deduction;
+              absentDays++;
+              absenceHours += dayExpected;
+            }
+          } else {
+            actualHours += dayNet;
+          }
         }
+      });
+
+      // 3) Days with NO attendance entry: treat as absent if expected (consume paid-holiday quota first)
+      try {
+        const [y, m] = month.split('-').map(Number);
+        const lastDay = new Date(y, m, 0).getDate();
+        for (let d = 1; d <= lastDay; d++) {
+          const dateStr = `${month}-${String(d).padStart(2,'0')}`;
+          if (attendanceByDate[dateStr]) continue; // already processed
+
+          let expected = getExpectedHours(employee, dateStr);
+          if (!expected || expected === 0) expected = getCompanyExpectedHoursForDate(dateStr);
+
+          if (expected > 0) {
+            if (remainingPaidHolidays > 0) {
+              remainingPaidHolidays--;
+              continue; // treat as paid holiday
+            } else {
+              const deduction = expected * hourlyRate || (empSalary / 30);
+              totalDeductions += deduction;
+              absentDays++;
+              absenceHours += expected;
+            }
+          }
+        }
+      } catch (err) {
+        // if month parsing fails, fail gracefully (don't crash payroll)
+        console.error('calculateEmployeeStats - month parse error', err);
       }
+
+      const advanceDeduction = calculateAdvanceDeduction(employee.id);
+      const finalPay = (employee.salary_monthly || 0) - Math.round(totalDeductions * 100) / 100 + Math.round(totalOvertimePay * 100) / 100 - advanceDeduction;
+
+      return {
+        actualHours,
+        overtimeHours,
+        absenceHours,
+        presentDays,
+        absentDays,
+        expectedHours: Math.round(expectedHours * 100) / 100,
+        deductions: Math.round(totalDeductions * 100) / 100,
+        overtimePay: Math.round(totalOvertimePay * 100) / 100,
+        advanceDeduction,
+        finalPay: Math.round(finalPay * 100) / 100
+      };
     }
-  } catch (err) {
-    // ignore month parse error
-  }
-
-  // Final numbers
-  const advanceDeduction = calculateAdvanceDeduction(employee.id);
-  const finalPay = empSalary - Math.round(totalDeductions * 100) / 100 + Math.round(totalOvertimePay * 100) / 100 - advanceDeduction;
-
-  return {
-    actualHours,
-    overtimeHours,
-    absenceHours,
-    presentDays,
-    absentDays,
-    expectedHours: Math.round(expectedHours * 100) / 100,
-    deductions: Math.round(totalDeductions * 100) / 100,
-    overtimePay: Math.round(totalOvertimePay * 100) / 100,
-    advanceDeduction,
-    finalPay: Math.round(finalPay * 100) / 100
-  };
-}
-
-
-  // Calculate expectedHours (sum per-day expected hours for reporting)
-  let expectedHours = 0;
-  try {
-    const [y, m] = month.split('-').map(Number);
-    const lastDay = new Date(y, m, 0).getDate();
-    for (let d = 1; d <= lastDay; d++) {
-      const dateStr = `${month}-${String(d).padStart(2,'0')}`;
-      let expected = getExpectedHours(employee, dateStr);
-      if (!expected || expected === 0) expected = getCompanyExpectedHoursForDate(dateStr);
-      expectedHours += Number(expected || 0);
-    }
-  } catch (err) {
-    expectedHours = employee.expected_monthly_hours || 0;
-  }
-
-  const advanceDeduction = calculateAdvanceDeduction(employee.id);
-  const finalPay = (employee.salary_monthly || 0) - Math.round(totalDeductions * 100) / 100 + Math.round(totalOvertimePay * 100) / 100 - advanceDeduction;
-
-  return {
-    actualHours,
-    overtimeHours,
-    absenceHours,
-    presentDays,
-    absentDays,
-    expectedHours,
-    deductions: Math.round(totalDeductions * 100) / 100,
-    overtimePay: Math.round(totalOvertimePay * 100) / 100,
-    advanceDeduction,
-    finalPay: Math.round(finalPay * 100) / 100
-  };
-}
-
+    // --------------------------
+    // End calculateEmployeeStats
+    // --------------------------
 
     window.renderDashboard = function () {
       try {
@@ -983,7 +970,7 @@ function calculateEmployeeStats(employee, month) {
       if (isWorkOverrideEl && isWorkOverrideEl.checked) {
         if (overrideHoursEl && overrideHoursEl.value !== '') {
           const parsed = parseFloat(overrideHoursEl.value);
-          if (!isNaN(parsed) && parsed >= 0) expectedHours = parsed; // <-- fixed: use JS && not 'and'
+          if (!isNaN(parsed) && parsed >= 0) expectedHours = parsed;
         } else {
           // infer: use sample schedule day if no value typed yet
           const scheduleDays = Object.values(employee.schedule || {});
@@ -1686,6 +1673,125 @@ function calculateEmployeeStats(employee, month) {
       get attendance() { return attendanceLog; },
       get advances() { return advances; },
       get dailyLaborers() { return dailyLaborers; }
+    };
+
+    // Diagnostic helper (paste into console to run)
+    window.generatePayrollDebug = function(employeeId, month) {
+      const emp = employees.find(e => Number(e.id) === Number(employeeId));
+      if (!emp) { console.error('Employee not found'); return; }
+
+      function fmt(n) { return (Math.round(n*100)/100).toFixed(2); }
+
+      const perDaySalary = (emp.salary_monthly || 0) / 30;
+      const rows = [];
+      let totalActual = 0, totalExpected = 0, totalOvertime = 0, totalDeductions = 0, totalAbsenceHours = 0;
+      const monthAttendance = filterAttendanceByMonth(month).filter(a => Number(a.employee_id) === Number(emp.id));
+      const attendanceByDate = {};
+      monthAttendance.forEach(a => { if (a && a.date) attendanceByDate[a.date] = a; });
+
+      // iterate month
+      const [y, m] = month.split('-').map(Number);
+      if (!y || !m) { console.error('Invalid month format. Use YYYY-MM'); return; }
+      const lastDay = new Date(y, m, 0).getDate();
+
+      console.log(`\nPayroll debug for ${emp.name} (${emp.id}) — month ${month}`);
+      console.log('Per-day salary:', fmt(perDaySalary), 'Hourly (approx) depends on expected hours per day');
+
+      for (let d = 1; d <= lastDay; d++) {
+        const date = `${month}-${String(d).padStart(2,'0')}`;
+        const dayName = getDayName(date);
+        const attendance = attendanceByDate[date] || null;
+        // determine expected hours
+        let expected = getExpectedHours(emp, date);
+        // fallback to company default if employee schedule is off or zero
+        if (!expected || expected === 0) expected = getCompanyExpectedHoursForDate(date);
+        // compute values
+        let net = 0, notes = '';
+        let deduction = 0, overtime = 0;
+        if (attendance) {
+          if (attendance.swap_compensated || attendance.status === 'Swapped-off' || attendance.status === 'Holiday') {
+            notes = attendance.status + ' (compensated)';
+            expected = attendance.expected_hours || expected || 0;
+            net = attendance.net_hours || 0;
+          } else {
+            net = Number(attendance.net_hours || 0);
+            // status
+            if (attendance.status === 'Present' || attendance.status === 'Half-day') {
+              // overtime
+              if (net > expected) { overtime = net - expected; }
+              // shortfall handling with grace
+              const graceMinutes = (typeof emp.grace_mins === 'number') ? emp.grace_mins : DEFAULT_GRACE_MINUTES;
+              const shortfall = Math.max(0, expected - net);
+              const shortfallMins = shortfall * 60;
+              if (shortfallMins > graceMinutes) {
+                const eff = (shortfallMins - graceMinutes) / 60;
+                const hourlyRate = (emp.salary_monthly || 0) / (emp.expected_monthly_hours || 192);
+                deduction = eff * hourlyRate;
+                notes = `Shortfall ${fmt(shortfall)}h, grace ${graceMinutes}m -> deduction ${fmt(deduction)}`;
+              } else {
+                if (shortfall > 0) notes = `Shortfall ${fmt(shortfall)}h within grace`;
+              }
+              if (attendance.status === 'Half-day') {
+                notes += (notes ? ' | ' : '') + 'Half-day enforced (may add half-day deduction)';
+              }
+            } else if (attendance.status === 'Absent' || attendance.status === 'Leave') {
+              deduction = perDaySalary;
+              notes = `${attendance.status} -> full day deduction`;
+            } else {
+              notes = `Status ${attendance.status}`;
+              if (!net && expected > 0) { deduction = perDaySalary; notes += ' -> treated as absent'; }
+            }
+          }
+        } else {
+          // no attendance record
+          if (expected > 0) {
+            deduction = perDaySalary;
+            notes = `No record — expected ${expected}h -> absent deduction`;
+          } else {
+            notes = 'No record — not expected to work';
+          }
+        }
+
+        // accumulate
+        totalActual += net;
+        totalExpected += expected;
+        totalOvertime += overtime;
+        totalDeductions += deduction;
+        totalAbsenceHours += (deduction === perDaySalary ? expected : (deduction > 0 ? (deduction / perDaySalary) * expected : 0));
+
+        rows.push({
+          date, dayName, expected: Number(expected), net: Number(net), overtime: Number(overtime), deduction: Number(deduction), notes
+        });
+      }
+
+      // Print table
+      console.table(rows.map(r => ({
+        Date: r.date,
+        Day: r.dayName,
+        Expected_h: r.expected.toFixed(2),
+        Net_h: r.net.toFixed(2),
+        Overtime_h: r.overtime.toFixed(2),
+        Deduction: '₹' + fmt(r.deduction),
+        Notes: r.notes
+      })));
+
+      const totalOvertimePay = totalOvertime * ((perDaySalary / (totalExpected > 0 ? totalExpected : 8)) || (perDaySalary/8)) * 1.5;
+      const grossSalary = emp.salary_monthly || 0;
+      const advanceDed = calculateAdvanceDeduction(emp.id);
+      const final = Math.round((grossSalary - totalDeductions + totalOvertimePay - advanceDed) * 100) / 100;
+
+      console.log('------ SUMMARY ------');
+      console.log('Gross salary:', '₹' + fmt(grossSalary));
+      console.log('Total expected hours (month):', fmt(totalExpected));
+      console.log('Total actual hours (month):', fmt(totalActual));
+      console.log('Total overtime hours:', fmt(totalOvertime));
+      console.log('Total deductions (₹):', '₹' + fmt(totalDeductions));
+      console.log('Total overtime pay (₹ approx):', '₹' + fmt(totalOvertimePay));
+      console.log('Advance deductions (₹):', '₹' + fmt(advanceDed));
+      console.log('Final pay (₹):', '₹' + fmt(final));
+      console.log('---------------------\n');
+
+      return { rows, totals: { totalExpected, totalActual, totalOvertime, totalDeductions, totalOvertimePay, advanceDeduction: advanceDed, finalPay: final } };
     };
 
   })();
